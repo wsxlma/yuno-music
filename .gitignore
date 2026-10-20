@@ -1,0 +1,35 @@
+# Build outputs
+build/
+target/
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Gradle
+.gradle/
+local.properties
+gradle-app.setting
+.cxx/
+
+# Kotlin
+.kotlin/
+
+# Rust
+Cargo.lock
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# Signing credentials (never committed)
+*.jks
+*.keystore
+*.p12
+*.pem
+keystore.properties
+
+# Logs
+*.log

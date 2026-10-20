@@ -1,0 +1,20 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/yuno-lyrics-model",
+    "crates/yuno-lyrics-timeline",
+    "crates/yuno-lyrics-ttml",
+    "crates/yuno-drm-rewrite",
+]
+
+[workspace.package]
+version = "2.0.0"
+edition = "2021"
+license = "UNLICENSED"
+publish = false
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = "debuginfo"

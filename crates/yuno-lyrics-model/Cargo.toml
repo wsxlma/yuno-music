@@ -1,0 +1,11 @@
+[package]
+name = "yuno-lyrics-model"
+description = "Yuno 歌词域模型 —— 字级粒度（根治\"词组一起亮\"）"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "yuno_lyrics_model"
+crate-type = ["rlib"]

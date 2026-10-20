@@ -1,0 +1,11 @@
+[package]
+name = "yuno-drm-rewrite"
+description = "Apple 全曲流重写：cbcs fMP4 → SAMPLE-AES-CENC + Widevine PSSH 构造"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "yuno_drm_rewrite"
+crate-type = ["rlib"]
