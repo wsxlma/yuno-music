@@ -1,7 +1,5 @@
 package com.xiaoliu.yuno.feature.search
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,7 +13,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -32,7 +32,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
@@ -40,6 +39,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.xiaoliu.yuno.core.model.Album
+import com.xiaoliu.yuno.core.model.Track
 import com.xiaoliu.yuno.core.ui.component.AlbumCard
 import com.xiaoliu.yuno.core.ui.component.ArtistRow
 import com.xiaoliu.yuno.core.ui.component.CollapsingHeader
@@ -60,11 +60,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 // ============================================================================
 // 搜索页 —— Material 3 质感：
 //   · 输入框 OutlinedTextField 背景透明化、边框半透明（需求钦定）
-//   · 空查询时展示流派网格（每格一套深色相渐变，有心意不花哨）
+//   · 空查询时展示各地区歌曲榜（Top 25），可切地区
 //   · 结果按 歌曲 / 专辑 / 歌手 三个 Tab 切换
 // ============================================================================
-
-private val GENRES = listOf("流行", "摇滚", "电子", "嘻哈", "R&B", "民谣", "古典", "原声带")
 
 @Composable
 fun SearchScreen(
@@ -74,6 +72,7 @@ fun SearchScreen(
     modifier: Modifier = Modifier
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val chartState by vm.chart.collectAsStateWithLifecycle()
 
     val listState = rememberLazyListState()
     // 结果列表滚动时大标题折叠（M3 LargeTopAppBar 式）
@@ -105,7 +104,17 @@ fun SearchScreen(
         Spacer(Modifier.height(16.dp))
 
         when {
-            state.query.isBlank() -> GenreGrid(onGenreClick = vm::onQueryChange, hazeState = hazeState)
+            // 空查询 → 各地区歌曲榜（Top 25）。榜单和结果列表共用 listState，
+            // 大标题的折叠才跟得上滚动。
+            state.query.isBlank() -> TopChartBoard(
+                chartState = chartState,
+                onSelectRegion = vm::selectRegion,
+                onPlay = { track -> vm.play(track, chartState.chart?.tracks.orEmpty()) },
+                onAddToQueue = vm::addToQueue,
+                onPlayNext = vm::playNext,
+                hazeState = hazeState,
+                listState = listState
+            )
 
             state.searching && state.results.isEmpty -> SearchingBlock()
 
@@ -181,55 +190,107 @@ private fun SearchField(
     }
 }
 
-/** 流派网格：液态玻璃方块 + 每格一层色相叠色（真机反馈：大方片也上玻璃） */
+/**
+ * 各地区歌曲榜（Top 25）。
+ *
+ * Apple 的 charts 只有 mostPlayed / dailyGlobalTop / cityTop 三种 kind，没有「月度」；
+ * 其中只有 mostPlayed 按 storefront 出，所以「每个地区」= 切 storefront。
+ * 榜名用 Apple 返回的原文，不自己编标题。
+ */
 @OptIn(ExperimentalHazeApi::class)
 @Composable
-private fun GenreGrid(onGenreClick: (String) -> Unit, hazeState: HazeState) {
-    Column(
-        Modifier.padding(horizontal = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        GENRES.chunked(2).forEachIndexed { rowIndex, row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                row.forEachIndexed { colIndex, genre ->
-                    val index = rowIndex * 2 + colIndex
-                    val hue = (index * 42f) % 360f
-                    val shape = RoundedCornerShape(22.dp)
-                    val glassStyle = rememberLiquidGlassStyle(shape = shape)
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(88.dp)
-                            .hazeGlass(
-                                input = HazeInput.Backdrop(hazeState),
-                                style = glassStyle
-                            )
-                            .clip(shape)
-                            .clickable { onGenreClick(genre) },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        // 色相叠色（保留每格辨识度，叠在玻璃上）
-                        Box(
-                            Modifier
-                                .matchParentSize()
-                                .background(
-                                    Brush.linearGradient(
-                                        listOf(
-                                            Color.hsv(hue, 0.58f, 0.45f).copy(alpha = 0.5f),
-                                            Color.hsv((hue + 26f) % 360f, 0.62f, 0.28f).copy(alpha = 0.5f)
-                                        )
-                                    )
-                                )
-                        )
-                        Text(
-                            text = genre,
-                            color = Color.White,
-                            fontSize = MaterialTheme.typography.titleLarge.fontSize,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
+private fun TopChartBoard(
+    chartState: ChartUiState,
+    onSelectRegion: (ChartRegion) -> Unit,
+    onPlay: (Track) -> Unit,
+    onAddToQueue: (Track) -> Unit,
+    onPlayNext: (Track) -> Unit,
+    hazeState: HazeState,
+    listState: LazyListState
+) {
+    LazyColumn(state = listState, contentPadding = PaddingValues(bottom = 180.dp)) {
+        item(key = "regions") {
+            RegionStrip(
+                regions = CHART_REGIONS,
+                selected = chartState.region,
+                onSelect = onSelectRegion,
+                hazeState = hazeState
+            )
+        }
+
+        item(key = "chart-title") {
+            Column(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
+                Text(
+                    text = chartState.chart?.name?.ifBlank { null } ?: "歌曲榜",
+                    color = Color.White,
+                    fontSize = MaterialTheme.typography.titleLarge.fontSize,
+                    fontWeight = FontWeight.Bold
+                )
+                if (chartState.chart != null) {
+                    Text(
+                        text = "共 ${chartState.chart.tracks.size} 首",
+                        color = YunoTextSecondary,
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
             }
+        }
+
+        when {
+            chartState.loading -> item(key = "chart-loading") {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 36.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    YunoLoadingCircle()
+                }
+            }
+
+            chartState.error != null -> item(key = "chart-error") {
+                HintText(chartState.error.orEmpty())
+            }
+
+            else -> itemsIndexed(
+                items = chartState.chart?.tracks.orEmpty(),
+                key = { _, t -> "c-${t.id}" }
+            ) { index, track ->
+                TrackRow(
+                    track = track,
+                    onClick = { onPlay(track) },
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                    leadingIndex = index + 1,
+                    leadingArtwork = true,
+                    trailingText = formatDuration(track.durationMs),
+                    onAddToQueue = onAddToQueue,
+                    onPlayNext = onPlayNext
+                )
+            }
+        }
+    }
+}
+
+/** 地区切换条：横向滚动的玻璃胶囊 */
+@OptIn(ExperimentalHazeApi::class)
+@Composable
+private fun RegionStrip(
+    regions: List<ChartRegion>,
+    selected: ChartRegion,
+    onSelect: (ChartRegion) -> Unit,
+    hazeState: HazeState
+) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(regions, key = { it.label }) { region ->
+            GlassChip(
+                text = region.label,
+                selected = region == selected,
+                onClick = { onSelect(region) },
+                hazeState = hazeState
+            )
         }
     }
 }

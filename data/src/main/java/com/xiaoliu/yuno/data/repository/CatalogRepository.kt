@@ -3,6 +3,7 @@ package com.xiaoliu.yuno.data.repository
 import com.xiaoliu.yuno.core.model.AlbumDetail
 import com.xiaoliu.yuno.core.model.HomeSection
 import com.xiaoliu.yuno.core.model.SearchResults
+import com.xiaoliu.yuno.core.model.SongChart
 import com.xiaoliu.yuno.core.network.api.AppleMusicApi
 
 /**
@@ -43,6 +44,10 @@ class CatalogRepository(
     }
 
     suspend fun search(term: String): SearchResults = api.search(term)
+
+    /** 各地区歌曲榜（Top 25）；storefront 传 null 走账号地区 */
+    suspend fun songChart(storefront: String? = null, limit: Int = 25): SongChart =
+        api.chartSongs(limit = limit, storefront = storefront)
 
     suspend fun albumDetail(albumId: String): AlbumDetail? = api.albumDetail(albumId)
 }

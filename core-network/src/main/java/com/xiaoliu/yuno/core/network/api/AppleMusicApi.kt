@@ -6,6 +6,7 @@ import com.xiaoliu.yuno.core.model.Artist
 import com.xiaoliu.yuno.core.model.Playlist
 import com.xiaoliu.yuno.core.model.PlaylistDetail
 import com.xiaoliu.yuno.core.model.SearchResults
+import com.xiaoliu.yuno.core.model.SongChart
 import com.xiaoliu.yuno.core.model.Track
 import com.xiaoliu.yuno.core.network.Http
 import com.xiaoliu.yuno.core.network.auth.AuthStore
@@ -98,6 +99,31 @@ class AppleMusicApi(
         return groups.toObjects()                    // results.albums = [ {chart, data:[...]} ]
             .flatMap { group -> group.arr("data").toObjects() }
             .mapNotNull(::resourceToAlbum)
+    }
+
+    /**
+     * 歌曲榜（Top 25）。
+     *
+     * charts 端点的 kind 只有三种 —— mostPlayed / dailyGlobalTop / cityTop，
+     * 没有「月度」维度；其中只有 mostPlayed 按 storefront 出，各地区 Top 25 就是它。
+     * 这里不传 chart 参数取默认榜（该地区的 Top Songs），榜单名原样回传给 UI，
+     * Apple 叫什么就显示什么，不自己编。
+     *
+     * @param storefront 地区码（us / cn / jp…）；null = 账号地区
+     */
+    suspend fun chartSongs(limit: Int = 25, storefront: String? = null): SongChart {
+        val sf = storefront?.trim()?.ifBlank { null } ?: storefront()
+        val url = "https://api.music.apple.com/v1/catalog/$sf/charts?types=songs&limit=$limit"
+        // results.songs = [ {chart, name, data:[...]} ]
+        val groups = parse(Http.get(url, headers(useUserToken = false)))
+            ?.obj("results")?.arr("songs").toObjects()
+        // 取第一个有内容的榜；榜单名跟着一起走，UI 侧不硬编码标题
+        val group = groups.firstOrNull { it.arr("data").toObjects().isNotEmpty() }
+        return SongChart(
+            name = group.str("name").orEmpty(),
+            storefront = sf,
+            tracks = group.arr("data").toObjects().mapNotNull(::resourceToTrack)
+        )
     }
 
     /** 单曲的 30 秒试听地址（未加密 m4a，播放兜底方案） */

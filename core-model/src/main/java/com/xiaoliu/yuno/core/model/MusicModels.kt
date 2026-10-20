@@ -79,6 +79,19 @@ data class SubscriptionInfo(
     val tier: String = ""
 )
 
+/**
+ * 歌曲榜（charts 端点）。
+ *
+ * Apple 的 charts 只有三种 kind —— mostPlayed / dailyGlobalTop / cityTop，
+ * 没有「月度」维度；其中只有 mostPlayed 按 storefront 出，各地区 Top 25 就是它。
+ * [name] 原样保留 Apple 返回的榜单名，不自己改写。
+ */
+data class SongChart(
+    val name: String,
+    val storefront: String,
+    val tracks: List<Track>
+)
+
 /** 专辑详情 = 专辑元数据 + 曲目列表 */
 data class AlbumDetail(
     val album: Album,

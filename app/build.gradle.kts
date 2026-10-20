@@ -1,4 +1,6 @@
 // app：壳工程 —— 导航装配、手写 DI 图、Application
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -12,18 +14,32 @@ android {
         applicationId = "com.xiaoliu.yuno"
         minSdk = 26
         targetSdk = 37
-        versionCode = 90
-        versionName = "2.0.0-r"
+        versionCode = 91
+        versionName = "2.1.0-r"
     }
 
-    // 个人项目：release 复用 debug keystore 签名 —— 包可直接安装，
-    // 且与 debug 包同签名，升级覆盖不用卸载。
+    // 个人版签名：优先用 D:\Yuno\keys\release-keystore.properties 指向的正式
+    // keystore；缺文件时退回 debug keystore，保证换机器仍能出包。
+    val releaseProps = Properties()
+    val propsFile = File("D:/Yuno/keys/release-keystore.properties")
+    if (propsFile.exists()) {
+        propsFile.inputStream().use { releaseProps.load(it) }
+    }
+    val usePersonal = releaseProps.getProperty("storeFile") != null
+
     signingConfigs {
         create("personalRelease") {
-            storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
+            if (usePersonal) {
+                storeFile = file(releaseProps.getProperty("storeFile"))
+                storePassword = releaseProps.getProperty("storePassword")
+                keyAlias = releaseProps.getProperty("keyAlias")
+                keyPassword = releaseProps.getProperty("keyPassword")
+            } else {
+                storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
         }
     }
 
