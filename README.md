@@ -102,4 +102,4 @@ Apple Music 是 Apple Inc. 的商标。本项目与 Apple Inc. 无任何关联�
 
 ---
 
-**L.DtQSuger**（GitHub ID：[wsxlmyy](https://github.com/wsxlmyy)）
+**L.DtQSuger**（GitHub ID：[wsxlma](https://github.com/wsxlma)）
