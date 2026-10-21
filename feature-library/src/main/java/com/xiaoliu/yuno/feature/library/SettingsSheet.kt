@@ -42,6 +42,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.xiaoliu.yuno.core.network.DolbyCapability
 import com.xiaoliu.yuno.core.network.LyricsSourcePref
 import com.xiaoliu.yuno.core.network.Quality
 import com.xiaoliu.yuno.core.ui.component.LyricFont
@@ -122,6 +123,7 @@ fun SettingsSheet(
 
                     // Dolby Atmos 独立开关（与音质档位互不干扰）
                     Spacer(Modifier.height(4.dp))
+                    val deviceAtmos = remember { DolbyCapability.deviceDecodesAtmos() }
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
@@ -137,7 +139,9 @@ fun SettingsSheet(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "空间音频流；不支持时回退到上方音质档位",
+                                // 探测结果直接写进说明，开着开关的人一眼知道走没走 Atmos
+                                text = if (deviceAtmos) "空间音频流；不支持时回退到上方音质档位"
+                                else "此设备无 E-AC3/AC-4 解码器，开启后仍走上方音质档位",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

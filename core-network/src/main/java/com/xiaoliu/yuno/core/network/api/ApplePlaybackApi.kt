@@ -1,6 +1,7 @@
 package com.xiaoliu.yuno.core.network.api
 
 import com.xiaoliu.yuno.core.network.AudioQuality
+import com.xiaoliu.yuno.core.network.DolbyCapability
 import com.xiaoliu.yuno.core.network.Quality
 import com.xiaoliu.yuno.core.network.Http
 import com.xiaoliu.yuno.core.network.YunoLog
@@ -123,7 +124,7 @@ class ApplePlaybackApi(
      * flavor 排序 —— **数字越小越优先**。
      *
      * 2.0.0 Beta6 改用苹果官方口径（无损 / 高解析度无损 / 杜比全景声）：
-     *   1. 开了杜比全景声 → 空间音频流排最前
+     *   1. 开了杜比全景声**且设备能解 E-AC3/AC-4** → 空间音频流排最前（-1）
      *   2. 高解析度无损（192kHz）优先于无损（48kHz）
      *   3. 都没有 → AAC 256 兜底
      *
@@ -144,14 +145,22 @@ class ApplePlaybackApi(
             "30:cbcp256" -> return 1
         }
 
-        val isAtmos = f.contains("atmos") || f.contains("dolby") || f.contains("ec3") || f.contains("ac4")
+        val isAtmos = f.contains("atmos") || f.contains("dolby") ||
+            f.contains("ec3") || f.contains("ec-3") ||
+            f.contains("ac4") || f.contains("ac-4")
         val isHiRes = f.contains("192") || f.contains("hires")
         val isLossless = f.contains("alac") || f.contains("lossless")
         val isAac256 = f.endsWith("256")
         val isAac64 = f.endsWith("64")
 
+        // Atmos 排在钉死的两条**之前**：宁可先试空间音频，试不通探测循环会
+        // 接着往下试 ctrp256/cbcp256（fetchStreamUrl 的探测是按排序逐个试的）。
+        // 设备解不了 E-AC3/AC-4 时不升 Atmos —— 硬选只会报错跌 preview。
+        val atmosPick = AudioQuality.dolbyAtmosEnabled && isAtmos &&
+            DolbyCapability.deviceDecodesAtmos()
+
         return when {
-            AudioQuality.dolbyAtmosEnabled && isAtmos -> 0
+            atmosPick -> -1
             isHiRes && AudioQuality.quality == Quality.HI_RES_LOSSLESS -> 2
             isHiRes -> 3
             isLossless -> 4
