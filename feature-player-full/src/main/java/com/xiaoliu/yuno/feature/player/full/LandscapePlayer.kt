@@ -81,6 +81,7 @@ import com.xiaoliu.yuno.core.ui.component.LyricFont
 import com.xiaoliu.yuno.core.model.Track
 import com.xiaoliu.yuno.core.ui.component.AlbumBlurBackground
 import com.xiaoliu.yuno.feature.lyrics.render.LyricWaitingDots
+import com.xiaoliu.yuno.feature.player.KaraokeSingLine
 import com.xiaoliu.yuno.core.ui.component.ArtworkPalette
 import com.xiaoliu.yuno.core.ui.component.rememberArtworkPalette
 import dev.chrisbanes.haze.ExperimentalHazeApi
@@ -598,26 +599,22 @@ private fun WheelLyrics(
         val from = (centerRow - 4).coerceAtLeast(0)
         val to = (centerRow + 4).coerceAtMost(lines.lastIndex)
 
-        if (waitingForLyrics) {
-            // 等待球（叠加层，不遮挡歌词）：真机需求 = 第一行位置，
-            // 球先消失、真词才滚上来。Beta5 起它不再"独占"渲染，
-            // 歌词照常显示在它下面/周围，避免前奏闪现。
-            //   · 前奏（currentIndex < 0）：固定在**第一行**的格子（baseY 处），
-            //     不动；第一行滚上来时 isInGap 切 false，球消失，第一行顶上来
-            //   · 间奏：跟在当前行（上一句）的格子里，随滚筒滚动
-            // 行盒高 = 实测行高 + 24dp 行距（与 offsets 同公式）
-            val rowIndex = if (currentIndex < 0) 0 else currentIndex
-            val rowBoxPx = if (rowIndex < heights.size) {
-                val h = heights[rowIndex]
-                val next = heights.getOrNull(rowIndex + 1)
-                (h + rowGap + (next ?: 0f)).toFloat()  // 前缀和差 = 行盒高（含下边距）
-            } else with(density) { 56.sp.toDp().toPx() }
+        if (waitingForLyrics && lines.isNotEmpty()) {
+            // 等待球（叠加层，不遮挡歌词）：横屏镜像竖屏的真机规格 ——
+            // 球只待在**行与行之间的空当**，绝不像旧版那样插进句子里。
+            //   · 前奏（currentIndex < 0）：第一句还没滚进来，放第一行上方的
+            //     空白带（baseY 半高处）；第一句滚上来时 isInGap 切 false，球消失
+            //   · 间奏：夹在当前句与下一句之间的行距中间（行距 24dp、药丸 33dp，
+            //     只轻微贴边），随滚筒滚动
+            val dotsH = with(density) { 52.dp.toPx() }
+            val dotsY = if (currentIndex < 0) {
+                baseY / 2f - dotsH / 2f
+            } else {
+                val row = currentIndex.coerceIn(0, lines.lastIndex)
+                (baseY + offsets[row] - roll) + heights[row] + rowGap / 2f - dotsH / 2f
+            }
             Box(
-                Modifier.offset {
-                    val y = if (currentIndex < 0) baseY
-                        else (baseY + offsets[rowIndex] - (offsets[lo] + (offsets[hi] - offsets[lo]) * frac))
-                    IntOffset(0, (y + rowBoxPx / 2f - with(density) { 6.dp.toPx() }).toInt())
-                }
+                Modifier.offset { IntOffset(0, dotsY.roundToInt()) }
             ) {
                 LyricWaitingDots()
             }
@@ -659,47 +656,66 @@ private fun WheelLyrics(
                 }
             } else 0f
 
-            Text(
-                text = lines[i].plainText,
-                color = Color.White,
-                fontSize = 36.sp,
-                fontFamily = LyricFont.currentFamily(),
-                // 折行行距：同句折成两行时，中间多留 34px ≈ 12dp
-                lineHeight = 56.sp,
-                // 统一字重：粗细不是可动画属性，切换时会突变
-                fontWeight = FontWeight.Medium,
-                // 一行放不下必须折行；宽度与实测时一致，放大后不溢出屏幕
-                softWrap = true,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .fillMaxWidth(0.87f)
-                    .offset {
-                        IntOffset(
-                            0,
-                            (baseY + offsets[i] - roll).roundToInt()
-                        )
+            // 行级变换（缩放/亮度/模糊 + 点击）：逐字行与纯文本行共用，
+            // 两种渲染在同一套滚筒几何下完全对齐
+            val lineTransform = Modifier
+                .offset {
+                    IntOffset(
+                        0,
+                        (baseY + offsets[i] - roll).roundToInt()
+                    )
+                }
+                .graphicsLayer {
+                    scaleX = nextScale
+                    scaleY = nextScale
+                    // 左侧为原点放大：当前行向左延伸，但不压到专辑图
+                    transformOrigin = TransformOrigin(0f, 0.5f)
+                    this.alpha = alpha
+                    // 单一图层内做模糊（未唱行）：
+                    // 原生 RenderEffect 经 asComposeRenderEffect() 桥接进 graphicsLayer，
+                    // 不另开 layer，不会像 Modifier.blur 那样多叠一层导致"凭空蹦出来"
+                    if (Build.VERSION.SDK_INT >= 31 && blurPx > 0f) {
+                        renderEffect =
+                            android.graphics.RenderEffect
+                                .createBlurEffect(blurPx, blurPx, Shader.TileMode.DECAL)
+                                .asComposeRenderEffect()
                     }
-                    .graphicsLayer {
-                        scaleX = nextScale
-                        scaleY = nextScale
-                        // 左侧为原点放大：当前行向左延伸，但不压到专辑图
-                        transformOrigin = TransformOrigin(0f, 0.5f)
-                        this.alpha = alpha
-                        // 单一图层内做模糊（未唱行）：
-                        // 原生 RenderEffect 经 asComposeRenderEffect() 桥接进 graphicsLayer，
-                        // 不另开 layer，不会像 Modifier.blur 那样多叠一层导致"凭空蹦出来"
-                        if (Build.VERSION.SDK_INT >= 31 && blurPx > 0f) {
-                            renderEffect =
-                                android.graphics.RenderEffect
-                                    .createBlurEffect(blurPx, blurPx, Shader.TileMode.DECAL)
-                                    .asComposeRenderEffect()
-                        }
-                    }
-                    .pointerInput(i) {
-                        detectTapGestures { onLineClick?.invoke(lines[i]) }
-                    }
-            )
+                }
+                .pointerInput(i) {
+                    detectTapGestures { onLineClick?.invoke(lines[i]) }
+                }
+
+            // 当前句 + 有字级时间戳 → 逐字卡拉 OK（真机需求：横屏也要逐字）；
+            // 无逐字的行、背景和声行、非当前句 → 照旧纯文本
+            val line = lines[i]
+            if (i == currentIndex && !line.isLineLevel && !line.isBackground) {
+                KaraokeSingLine(
+                    line = line,
+                    positionMs = positionMs,
+                    style = wheelStyle().copy(fontFamily = LyricFont.currentFamily()),
+                    maxWidthPx = textWidthPx,
+                    maxLines = 3,
+                    modifier = lineTransform
+                )
+            } else {
+                Text(
+                    text = line.plainText,
+                    color = Color.White,
+                    fontSize = 36.sp,
+                    fontFamily = LyricFont.currentFamily(),
+                    // 折行行距：同句折成两行时，中间多留 34px ≈ 12dp
+                    lineHeight = 56.sp,
+                    // 统一字重：粗细不是可动画属性，切换时会突变
+                    fontWeight = FontWeight.Medium,
+                    // 一行放不下必须折行；宽度与实测时一致，放大后不溢出屏幕
+                    softWrap = true,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .fillMaxWidth(0.87f)
+                        .then(lineTransform)
+                )
+            }
             }
         }
     }

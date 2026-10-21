@@ -91,7 +91,7 @@ private val LyricFontSize = 34.sp
  */
 private val LyricLineSpacing = 16.dp
 
-private const val UNSUNG_ALPHA = 0.20f     // 未唱字：偏黑灰，背景可透
+internal const val UNSUNG_ALPHA = 0.20f     // 未唱字：偏黑灰，背景可透
 private const val INACTIVE_ALPHA = 0.30f   // 非当前行
 private const val BG_VOCAL_ALPHA = 0.55f   // 背景人声（x-bg）
 private const val BG_FONT_SCALE = 0.82f
@@ -102,7 +102,7 @@ private const val BG_FONT_SCALE = 0.82f
  * 真机 Beta7 微调：1.08 → **1.036**（用户给的目标值 1.0358 四舍五入）。
  * 行级歌词 [SyncedLine] 唱完保持的放大同步改成同一数值，两处观感一致。
  */
-private const val CHAR_SCALE = 1.036f
+internal const val CHAR_SCALE = 1.036f
 /** 长按进浮动歌词的判定时长（真机反馈：系统默认 ~500ms 太短易误触） */
 private const val LONG_PRESS_MS = 700L
 
@@ -576,7 +576,7 @@ private fun KaraokeLine(
  * Beta1 的 bug：只画揭示层、不画底子，且 reveal=0 时裁剪宽度为 0
  * → 唱到之前整句隐形、唱到时才现场绘画。这就是你说的那个症状。
  */
-private fun drawChar(
+internal fun drawChar(
     scope: androidx.compose.ui.graphics.drawscope.DrawScope,
     layout: TextLayoutResult,
     at: Offset,
