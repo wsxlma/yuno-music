@@ -10,10 +10,14 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.xiaoliu.yuno.core.playback.PlaybackStateHub
 import com.xiaoliu.yuno.core.ui.theme.YunoInk
 import com.xiaoliu.yuno.core.ui.theme.YunoTheme
 import com.xiaoliu.yuno.nav.AppNavHost
@@ -36,6 +40,11 @@ class MainActivity : ComponentActivity() {
                 LocalHazePerformanceMode provides HazePerformanceMode.Performance
             ) {
                 YunoTheme {
+                    // 播放期间保持屏幕常亮：歌在放，歌词界面就不能被系统熄屏抢走。
+                    // 暂停/播完立刻恢复系统自动熄屏，不额外耗电。
+                    val playback by PlaybackStateHub.state.collectAsStateWithLifecycle()
+                    KeepScreenOnInPlayback(playback.isPlaying)
+
                     val primed by graph.authPrimed.collectAsStateWithLifecycle()
                     val loggedIn by graph.authStore.isLoggedIn
                         .collectAsStateWithLifecycle(initialValue = false)
@@ -64,5 +73,19 @@ class MainActivity : ComponentActivity() {
         ) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 100)
         }
+    }
+}
+
+/**
+ * 播放期间屏幕常亮（真机需求：看歌词/听歌被系统熄屏打断不行）。
+ * 挂 FLAG_KEEP_SCREEN_ON 到组合根 View 上；[enabled] 翻回 false 就摘掉，
+ * 系统自动熄屏立即恢复。
+ */
+@Composable
+private fun KeepScreenOnInPlayback(enabled: Boolean) {
+    val view = LocalView.current
+    DisposableEffect(enabled) {
+        if (enabled) view.keepScreenOn = true
+        onDispose { view.keepScreenOn = false }
     }
 }
