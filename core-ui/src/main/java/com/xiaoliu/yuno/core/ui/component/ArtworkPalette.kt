@@ -110,21 +110,45 @@ private suspend fun extractPalette(
         ?: return@runCatching null
     val bitmap = result.image.toBitmap()
     val fb = ArtworkPalette.Fallback
-    val p = Palette.from(bitmap).clearFilters().maximumColorCount(32).generate()
+    val p = Palette.from(bitmap).maximumColorCount(24).generate()
+
+    // 真机 bug（2026-10-23）：流动背景取到「封面只有一小点的颜色」——
+    // 根因是 getVibrantColor/getDarkVibrantColor 只看饱和度不看面积，
+    // 小色块颜色 D 哪怕只占封面 2% 也能赢。修法：**按 population（≈面积）排序**，
+    // 所有角色只从「面积前 8 名」的色块里挑，小面积色块一律踢出候选。
+    val byArea = p.swatches.sortedByDescending { it.population }
+    if (byArea.isEmpty()) return@runCatching null
+    val top = byArea.take(8)
+    val dominantRgb = top.first().rgb                      // 面积最大 = 主色
+    val domHsl = top.first().hsl
+
+    // vibrant 位：只在**面积靠前**的颜色里挑「饱和 + 与主色色相差一点」的
+    val areaFloor = (top.first().population / 8).coerceAtLeast(1)
+    val vibrantRgb = top
+        .filter { it.population >= areaFloor }
+        .maxByOrNull { s ->
+            val dh = Math.abs(s.hsl[0] - domHsl[0]) / 360f
+            val hueDist = Math.min(dh, 1f - dh)
+            s.hsl[1] * 0.55f + hueDist * 0.30f + s.hsl[2] * 0.15f
+        }?.rgb
+
+    // dark / light：面积靠前里最暗 / 最亮
+    val darkRgb = top.minByOrNull { it.hsl[2] }?.rgb ?: dominantRgb
+    val lightRgb = top.maxByOrNull { it.hsl[2] }?.rgb ?: dominantRgb
+
+    // muted：面积靠前里饱和度最低的；实在没有就拿主色去饱和
+    val mutedRgb = top
+        .filter { it.hsl[1] < 0.35f }
+        .maxByOrNull { it.population }?.rgb
+        ?: lerp(Color(dominantRgb), Color.Gray, 0.45f).toArgb()
 
     ArtworkPalette(
-        dominant = Color(p.getDominantColor(fb.dominant.toArgb())).ensureLuminance(0.16f, 0.8f),
+        dominant = Color(dominantRgb).ensureLuminance(0.16f, 0.8f),
         vibrant = Color(
-            p.getVibrantColor(p.getMutedColor(fb.vibrant.toArgb()))
+            vibrantRgb ?: Color(dominantRgb).boostSaturation().toArgb()
         ).ensureLuminance(0.24f),
-        dark = Color(
-            p.getDarkVibrantColor(
-                p.getDarkMutedColor(fb.dark.toArgb())
-            )
-        ).ensureLuminance(0.03f, 0.28f),
-        light = Color(
-            p.getLightVibrantColor(p.getLightMutedColor(fb.light.toArgb()))
-        ).ensureLuminance(0.34f),
-        muted = Color(p.getMutedColor(fb.muted.toArgb())).ensureLuminance(0.10f, 0.55f)
+        dark = Color(darkRgb).ensureLuminance(0.03f, 0.28f),
+        light = Color(lightRgb).ensureLuminance(0.34f),
+        muted = Color(mutedRgb).ensureLuminance(0.10f, 0.55f)
     )
 }.getOrNull()

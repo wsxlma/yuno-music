@@ -2,6 +2,7 @@ package com.xiaoliu.yuno
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -17,6 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xiaoliu.yuno.core.playback.PlaybackStateHub
 import com.xiaoliu.yuno.core.ui.theme.YunoInk
 import com.xiaoliu.yuno.core.ui.theme.YunoTheme
@@ -27,6 +29,11 @@ import dev.chrisbanes.haze.HazePerformanceMode
 import dev.chrisbanes.haze.LocalHazePerformanceMode
 
 class MainActivity : ComponentActivity() {
+
+    /** TV 判定（真机口径）：Android TV 上同一个 APK 自动换 TV 界面 */
+    private val isTv: Boolean
+        get() = (resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) ==
+            Configuration.UI_MODE_TYPE_TELEVISION
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -58,7 +65,17 @@ class MainActivity : ComponentActivity() {
                     ) {
                         when {
                             !primed -> Unit                       // 凭据读取（毫秒级），黑底兜着
+                            !loggedIn && isTv -> {
+                                val tvVm: com.xiaoliu.yuno.feature.tv.TvViewModel =
+                                    viewModel(factory = graph.viewModelFactory)
+                                com.xiaoliu.yuno.feature.tv.TvLoginPage(vm = tvVm)
+                            }
                             !loggedIn -> LoginScreen(graph = graph)
+                            isTv -> {
+                                val tvVm: com.xiaoliu.yuno.feature.tv.TvViewModel =
+                                    viewModel(factory = graph.viewModelFactory)
+                                com.xiaoliu.yuno.feature.tv.TvShell(vm = tvVm)
+                            }
                             else -> AppNavHost(graph = graph, autoOpenPlayer = autoOpenPlayer)
                         }
                     }

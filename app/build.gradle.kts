@@ -14,8 +14,8 @@ android {
         applicationId = "com.xiaoliu.yuno"
         minSdk = 26
         targetSdk = 37
-        versionCode = 93
-        versionName = "2.1.2-r"
+        versionCode = 94
+        versionName = "2.2.0-r"
     }
 
     // 个人版签名：优先用 D:\Yuno\keys\release-keystore.properties 指向的正式
@@ -78,6 +78,7 @@ dependencies {
     implementation(project(":feature-lyrics-render"))
     implementation(project(":feature-lyrics-portrait"))
     implementation(project(":feature-lyrics-floating"))
+    implementation(project(":feature-tv"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

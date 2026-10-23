@@ -30,6 +30,7 @@ import com.xiaoliu.yuno.feature.home.HomeViewModel
 import com.xiaoliu.yuno.feature.library.LibraryViewModel
 import com.xiaoliu.yuno.feature.player.PlayerViewModel
 import com.xiaoliu.yuno.feature.search.SearchViewModel
+import com.xiaoliu.yuno.feature.tv.TvViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -158,6 +159,16 @@ class AppGraph(private val app: Application) {
         initializer { SearchViewModel(catalogRepository, playbackController) }
         initializer { LibraryViewModel(libraryRepository, localCache, playbackController) }
         initializer { PlayerViewModel(playbackController, lyricsRepository, favoriteStore) }
+        initializer {
+            TvViewModel(
+                catalog = catalogRepository,
+                library = libraryRepository,
+                lyricsRepository = lyricsRepository,
+                controller = playbackController,
+                authStore = authStore,
+                devTokenProvider = devTokenProvider
+            )
+        }
         initializer {
             val handle = createSavedStateHandle()
             AlbumDetailViewModel(
