@@ -92,7 +92,9 @@ private val LyricFontSize = 34.sp
 private val LyricLineSpacing = 16.dp
 
 internal const val UNSUNG_ALPHA = 0.20f     // 未唱字：偏黑灰，背景可透
-private const val INACTIVE_ALPHA = 0.30f   // 非当前行
+private const val INACTIVE_ALPHA = 0.18f
+// ↑ 非当前行统一暗档（真机 v2：未唱句全部同一档「非常暗、非常通透」
+//   —— 不允许下一句有中间亮；唱到才亮起）
 private const val BG_VOCAL_ALPHA = 0.55f   // 背景人声（x-bg）
 private const val BG_FONT_SCALE = 0.82f
 

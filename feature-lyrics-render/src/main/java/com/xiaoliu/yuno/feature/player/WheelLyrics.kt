@@ -57,6 +57,9 @@ private const val CURRENT_LINE_SCALE = 1.14f
  */
 private const val NEXT_LINE_SCALE = 0.88f
 
+/** 非当前行统一暗档（真机 v2：非常暗、非常通透） */
+private const val INACTIVE_LINE_ALPHA = 0.18f
+
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun WheelLyrics(
@@ -191,10 +194,12 @@ fun WheelLyrics(
                 repeat(steps) { sized *= perRow }
                 val scale = sized.coerceAtLeast(0.55f)
                 val nextScale = scale
-            // 亮度（真机：上下行太亮，快赶上主歌词了）：
-            // 已唱行压到 0.62 起、未唱行再额外压一层；当前行保持 1
-            val extraDim = 1f - 0.20f * d.coerceIn(0f, 1f)
-            val alpha = ((1f - 0.55f * absD) * extraDim).coerceIn(0.05f, 1f)
+            // 亮度（真机 v2）：**只此两档** —— 当前句亮 1.0；其余一律同档暗
+            //（下一句/已唱完/前奏前的所有行一视同仁）。
+            // 旧法按距离渐变（d=1 给 0.45），前奏时第 0 行 d=0 被判成"当前行"
+            // 全亮纯文本，唱到时才换逐字渲染 → 视觉上"先暗下去再重新亮起来"，
+            // 且"下一句偏亮、轮到它时再暗下去重亮" —— 两档制一并根治。
+            val alpha = if (i == currentIndex) 1f else INACTIVE_LINE_ALPHA
             // 未唱行：毛玻璃模糊。模糊半径直接画在同一个 graphicsLayer 里
             // （RenderEffect），不再叠 Modifier.blur 的独立图层——
             // 之前"凭空蹦出来"就是双层 layer 叠加导致的。
