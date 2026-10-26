@@ -1,36 +1,25 @@
 package com.xiaoliu.yuno.di
 
 import android.app.Application
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.createSavedStateHandle
-import androidx.lifecycle.viewmodel.initializer
-import androidx.lifecycle.viewmodel.viewModelFactory
+import com.xiaoliu.yuno.core.network.AudioQuality
+import com.xiaoliu.yuno.core.network.LyricsSourcePref
+import com.xiaoliu.yuno.core.network.YunoLog
 import com.xiaoliu.yuno.core.network.api.AppleLyricsApi
 import com.xiaoliu.yuno.core.network.api.AppleMusicApi
 import com.xiaoliu.yuno.core.network.api.ApplePlaybackApi
 import com.xiaoliu.yuno.core.network.api.LrcLibApi
-import com.xiaoliu.yuno.core.network.AudioQuality
-import com.xiaoliu.yuno.core.network.LyricsSourcePref
-import com.xiaoliu.yuno.core.network.YunoLog
-import com.xiaoliu.yuno.core.ui.component.LyricFont
 import com.xiaoliu.yuno.core.network.auth.AppleCredentials
 import com.xiaoliu.yuno.core.network.auth.AuthStore
 import com.xiaoliu.yuno.core.network.auth.DevTokenProvider
 import com.xiaoliu.yuno.core.playback.AppleWidevine
 import com.xiaoliu.yuno.core.playback.PlaybackController
+import com.xiaoliu.yuno.core.ui.component.LyricFont
 import com.xiaoliu.yuno.data.playback.AppleStreamResolver
 import com.xiaoliu.yuno.data.repository.CatalogRepository
 import com.xiaoliu.yuno.data.repository.FavoriteStore
 import com.xiaoliu.yuno.data.repository.LibraryRepository
 import com.xiaoliu.yuno.data.repository.LocalCache
 import com.xiaoliu.yuno.data.repository.LyricsRepository
-import com.xiaoliu.yuno.feature.detail.AlbumDetailViewModel
-import com.xiaoliu.yuno.feature.detail.PlaylistDetailViewModel
-import com.xiaoliu.yuno.feature.home.HomeViewModel
-import com.xiaoliu.yuno.feature.library.LibraryViewModel
-import com.xiaoliu.yuno.feature.player.PlayerViewModel
-import com.xiaoliu.yuno.feature.search.SearchViewModel
-import com.xiaoliu.yuno.feature.tv.TvViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -41,10 +30,11 @@ import kotlinx.coroutines.launch
 import java.io.File
 
 /**
- * 手动依赖图 —— 不引 Hilt，个人项目一个文件看清所有接线。
+ * AppGraph 的共享基类 —— 网络/数据/播放三层与启动流程，手机专版（phone 源码集）
+ * 与电视专版（tv 源码集）各有一个 AppGraph 子类，只添加各自独有的 ViewModel 工厂。
  * 依赖方向永远单向：feature → data → core-network / core-playback → core-model。
  */
-class AppGraph(private val app: Application) {
+open class AppGraphCore(protected val app: Application) {
 
     // ---------------- 网络层 ----------------
 
@@ -78,10 +68,10 @@ class AppGraph(private val app: Application) {
     private val _authPrimed = MutableStateFlow(false)
     val authPrimed: StateFlow<Boolean> = _authPrimed.asStateFlow()
 
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    protected val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun start() {
-        // 运行日志落盘（资料库页「导出日志」一键分享用；不含任何令牌）
+        // 运行日志落盘（资库页「导出日志」一键分享用；不含任何令牌）
         YunoLog.init(File(app.getExternalFilesDir(null) ?: app.filesDir, "logs/yuno.log"))
         YunoLog.d(
             "App",
@@ -115,6 +105,8 @@ class AppGraph(private val app: Application) {
         }
     }
 
+    // ---------------- 登录 / 退出（两个专版共用同一套凭据机制） ----------------
+
     /** 登录收割成功后落盘 */
     suspend fun onLoggedIn(credentials: AppleCredentials) {
         authStore.save(credentials)
@@ -125,7 +117,7 @@ class AppGraph(private val app: Application) {
         runCatching { devTokenProvider.developerToken() }
     }
 
-    /** 退出登录（资料库页账户弹层触发） */
+    /** 退出登录（手机版：资料库页账户弹层触发；TV 版同样可用） */
     suspend fun logout() {
         runCatching { playbackController.pause() }
         // 三处一起清（缺一个都退不掉）：
@@ -149,44 +141,6 @@ class AppGraph(private val app: Application) {
             runCatching { logout() }.onFailure {
                 YunoLog.d("App", "logout failed: ${it.message}")
             }
-        }
-    }
-
-    // ---------------- ViewModel 工厂 ----------------
-
-    val viewModelFactory: ViewModelProvider.Factory = viewModelFactory {
-        initializer { HomeViewModel(catalogRepository, localCache, playbackController) }
-        initializer { SearchViewModel(catalogRepository, playbackController) }
-        initializer { LibraryViewModel(libraryRepository, localCache, playbackController) }
-        initializer { PlayerViewModel(playbackController, lyricsRepository, favoriteStore) }
-        initializer {
-            TvViewModel(
-                catalog = catalogRepository,
-                library = libraryRepository,
-                lyricsRepository = lyricsRepository,
-                controller = playbackController,
-                authStore = authStore,
-                devTokenProvider = devTokenProvider
-            )
-        }
-        initializer {
-            val handle = createSavedStateHandle()
-            AlbumDetailViewModel(
-                albumId = handle.get<String>("albumId").orEmpty(),
-                catalog = catalogRepository,
-                library = libraryRepository,
-                cache = localCache,
-                controller = playbackController
-            )
-        }
-        initializer {
-            val handle = createSavedStateHandle()
-            PlaylistDetailViewModel(
-                playlistId = handle.get<String>("playlistId").orEmpty(),
-                library = libraryRepository,
-                cache = localCache,
-                controller = playbackController
-            )
         }
     }
 }

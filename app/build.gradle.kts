@@ -51,6 +51,15 @@ android {
         }
     }
 
+    // ── 双专版（用户钦定 2026-10-26）──
+    // phone / tv 两个 flavor，各自的源码集与依赖完全隔离：
+    //   手机包里没有 feature-tv，电视包里没有任何手机 feature。
+    flavorDimensions += "device"
+    productFlavors {
+        create("phone")
+        create("tv")
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -62,6 +71,7 @@ android {
 }
 
 dependencies {
+    // ── 两侧共用 ──
     implementation(project(":core-model"))
     implementation(project(":core-ui"))
     implementation(project(":core-glass"))
@@ -69,26 +79,29 @@ dependencies {
     implementation(project(":core-playback"))
     implementation(project(":core-rust"))
     implementation(project(":data"))
-
-    implementation(project(":feature-home"))
-    implementation(project(":feature-search"))
-    implementation(project(":feature-detail"))
-    implementation(project(":feature-library"))
-    implementation(project(":feature-player-full"))
+    // 歌词渲染引擎（手机竖屏引擎 + 横屏滚筒/TV 共享件）
     implementation(project(":feature-lyrics-render"))
-    implementation(project(":feature-lyrics-portrait"))
-    implementation(project(":feature-lyrics-floating"))
-    implementation(project(":feature-tv"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
-    implementation(libs.androidx.navigation.compose)
     implementation(libs.kotlinx.coroutines.android)
 
-    // MainShell 的内容区 hazeSource + rememberHazeState
-    implementation(libs.haze)
+    // ── 仅手机专版 ──
+    "phoneImplementation"(project(":feature-home"))
+    "phoneImplementation"(project(":feature-search"))
+    "phoneImplementation"(project(":feature-detail"))
+    "phoneImplementation"(project(":feature-library"))
+    "phoneImplementation"(project(":feature-player-full"))
+    "phoneImplementation"(project(":feature-lyrics-portrait"))
+    "phoneImplementation"(project(":feature-lyrics-floating"))
+    "phoneImplementation"(libs.androidx.navigation.compose)
+    "phoneImplementation"(libs.haze)
+
+    // ── 仅电视专版 ──
+    "tvImplementation"(project(":feature-tv"))
+    "tvImplementation"(libs.haze)
 
     debugImplementation(libs.compose.ui.tooling)
 }

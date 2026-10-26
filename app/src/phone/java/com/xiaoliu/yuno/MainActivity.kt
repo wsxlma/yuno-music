@@ -2,7 +2,6 @@ package com.xiaoliu.yuno
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -11,14 +10,10 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xiaoliu.yuno.core.playback.PlaybackStateHub
 import com.xiaoliu.yuno.core.ui.theme.YunoInk
 import com.xiaoliu.yuno.core.ui.theme.YunoTheme
@@ -28,12 +23,8 @@ import dev.chrisbanes.haze.ExperimentalHazeApi
 import dev.chrisbanes.haze.HazePerformanceMode
 import dev.chrisbanes.haze.LocalHazePerformanceMode
 
+/** 手机专版入口（TV 专版的 MainActivity 在 tv 源码集里，互不掺杂） */
 class MainActivity : ComponentActivity() {
-
-    /** TV 判定（真机口径）：Android TV 上同一个 APK 自动换 TV 界面 */
-    private val isTv: Boolean
-        get() = (resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) ==
-            Configuration.UI_MODE_TYPE_TELEVISION
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,7 +39,6 @@ class MainActivity : ComponentActivity() {
             ) {
                 YunoTheme {
                     // 播放期间保持屏幕常亮：歌在放，歌词界面就不能被系统熄屏抢走。
-                    // 暂停/播完立刻恢复系统自动熄屏，不额外耗电。
                     val playback by PlaybackStateHub.state.collectAsStateWithLifecycle()
                     KeepScreenOnInPlayback(playback.isPlaying)
 
@@ -65,17 +55,7 @@ class MainActivity : ComponentActivity() {
                     ) {
                         when {
                             !primed -> Unit                       // 凭据读取（毫秒级），黑底兜着
-                            !loggedIn && isTv -> {
-                                val tvVm: com.xiaoliu.yuno.feature.tv.TvViewModel =
-                                    viewModel(factory = graph.viewModelFactory)
-                                com.xiaoliu.yuno.feature.tv.TvLoginPage(vm = tvVm)
-                            }
                             !loggedIn -> LoginScreen(graph = graph)
-                            isTv -> {
-                                val tvVm: com.xiaoliu.yuno.feature.tv.TvViewModel =
-                                    viewModel(factory = graph.viewModelFactory)
-                                com.xiaoliu.yuno.feature.tv.TvShell(vm = tvVm)
-                            }
                             else -> AppNavHost(graph = graph, autoOpenPlayer = autoOpenPlayer)
                         }
                     }
@@ -90,19 +70,5 @@ class MainActivity : ComponentActivity() {
         ) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 100)
         }
-    }
-}
-
-/**
- * 播放期间屏幕常亮（真机需求：看歌词/听歌被系统熄屏打断不行）。
- * 挂 FLAG_KEEP_SCREEN_ON 到组合根 View 上；[enabled] 翻回 false 就摘掉，
- * 系统自动熄屏立即恢复。
- */
-@Composable
-private fun KeepScreenOnInPlayback(enabled: Boolean) {
-    val view = LocalView.current
-    DisposableEffect(enabled) {
-        if (enabled) view.keepScreenOn = true
-        onDispose { view.keepScreenOn = false }
     }
 }

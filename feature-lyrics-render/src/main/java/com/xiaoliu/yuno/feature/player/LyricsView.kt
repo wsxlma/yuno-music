@@ -413,12 +413,21 @@ fun LyricsView(
             val gapX = (topPadPx - topInsetPx).coerceAtLeast(1f)
             val dotsCenterY = topInsetPx + gapX * 13f / 20f
             val halfRow = DOTS_ROW_DP * density.density / 2f
+            // 真机（2026-10-26）：逐颗渐亮要**铺满整个空档**，不许 1 秒内三颗全亮。
+            // 时间窗 =「下一句开始 - 当前」，空档切换时重算一次，动画播放期间不重算
+            //（记住 remember 只在 key 变化时重算，positionMs 的读取只是取值不算订阅）。
+            val dotsSpanMs = remember(lines, waitingForLyrics) {
+                val now = positionMs.value
+                val next = lines.firstOrNull { it.startMs > now }?.startMs
+                    ?: (now + 6000L)
+                (next - now).coerceIn(3000L, 60_000L)
+            }
             Box(
                 Modifier
                     .fillMaxWidth()
                     .offset { IntOffset(0, (dotsCenterY - halfRow).toInt()) }
             ) {
-                LyricWaitingDots(Modifier.fillMaxWidth())
+                LyricWaitingDots(Modifier.fillMaxWidth(), spanMs = dotsSpanMs)
             }
         }
     }

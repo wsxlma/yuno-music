@@ -154,10 +154,17 @@ fun WheelLyrics(
                 val row = currentIndex.coerceIn(0, lines.lastIndex)
                 (baseY + offsets[row] - roll) + heights[row] + rowGap / 2f - dotsH / 2f
             }
+            // 逐颗渐亮铺满整个空档（竖屏同规格），谱次切换时重算一次
+            val dotsSpanMs = remember(lines, waitingForLyrics) {
+                val now = positionMs.value
+                val next = lines.firstOrNull { it.startMs > now }?.startMs
+                    ?: (now + 6000L)
+                (next - now).coerceIn(3000L, 60_000L)
+            }
             Box(
                 Modifier.offset { IntOffset(0, dotsY.roundToInt()) }
             ) {
-                LyricWaitingDots()
+                LyricWaitingDots(spanMs = dotsSpanMs)
             }
         }
 

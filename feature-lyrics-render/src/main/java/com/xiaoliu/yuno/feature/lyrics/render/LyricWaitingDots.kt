@@ -31,14 +31,15 @@ import androidx.compose.ui.unit.dp
  *    该 API **只在目标值变化时才动画**，首次组合直接就是 1f，
  *    所以三个点一上来就全亮，从来没渐亮过。
  *    改用 `Animatable` + `LaunchedEffect`：进组合时从 0 显式起播。
+ * 真机（2026-10-26）：起播时刻与渐亮时长由**整个空档的时间窗**摊派，
+ * 第 i 颗从窗口的 i/3 处起播、用 1/3 窗口渐亮 —— 逐颗铺满前奏。
  */
 @Composable
-private fun WaitingDot(index: Int) {
+private fun WaitingDot(delayMs: Int, durationMs: Int) {
     val anim = remember { Animatable(0f) }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(delayMs, durationMs) {
         anim.snapTo(0f)
-        // 0ms / 110ms / 220ms 依次起播，各 300ms 渐亮
-        anim.animateTo(1f, tween(durationMillis = 300, delayMillis = index * 110))
+        anim.animateTo(1f, tween(durationMillis = durationMs, delayMillis = delayMs))
     }
     Box(
         Modifier
@@ -67,7 +68,13 @@ private fun WaitingDot(index: Int) {
  * 另外加了一层**半透明胶囊底**，保证在任何专辑配色背景上都看得见。
  */
 @Composable
-fun LyricWaitingDots(modifier: Modifier = Modifier) {
+fun LyricWaitingDots(
+    modifier: Modifier = Modifier,
+    /** 三颗球要铺满的时间窗（毫秒）—— 调用方按「本次空档剩余时长」给，逐颗均分 */
+    spanMs: Long = 1500L
+) {
+    // 每颗占 1/3 窗口：第 i 颗 delay = i×step、渐亮时长 = step
+    val step = (spanMs.coerceAtLeast(900L) / 3L).toInt()
     // 行高与歌词行对齐（LyricLineSpacing×2 ≈ 32dp 之上再留一行高），保证第一句落位精确
     Box(
         modifier = modifier
@@ -85,7 +92,7 @@ fun LyricWaitingDots(modifier: Modifier = Modifier) {
                 .padding(horizontal = 18.dp, vertical = 10.dp)
         ) {
             repeat(3) { i ->
-                WaitingDot(index = i)
+                WaitingDot(delayMs = i * step, durationMs = step)
             }
         }
     }

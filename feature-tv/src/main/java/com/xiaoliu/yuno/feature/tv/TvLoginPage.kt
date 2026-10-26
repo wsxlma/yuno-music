@@ -9,11 +9,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import android.content.res.Configuration
+import android.os.Build
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -107,6 +111,19 @@ fun TvLoginPage(vm: TvViewModel) {
                     )
                 }
             }
+
+            // 环境自检（真机定位用）：一眼确认盒子把本 App 当成电视版没有
+            val cfg = LocalConfiguration.current
+            val uiMode = cfg.uiMode and Configuration.UI_MODE_TYPE_MASK
+            val isTvMode = uiMode == Configuration.UI_MODE_TYPE_TELEVISION
+            Spacer(Modifier.height(48.dp))
+            Text(
+                text = "环境：${if (isTvMode) "TV 判定 ✓ 电视版" else "非 TV ✗ 走了手机版"} · " +
+                    "API ${Build.VERSION.SDK_INT} · uiMode=$uiMode · " +
+                    "密度 ${LocalDensity.current.density}",
+                color = YunoTextSecondary,
+                style = MaterialTheme.typography.bodySmall
+            )
         }
     }
 }

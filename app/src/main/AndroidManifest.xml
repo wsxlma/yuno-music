@@ -16,20 +16,16 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Yuno">
 
-        <!-- configChanges：横屏全屏播放要切 requestedOrientation，若让 Activity 重建，
-             播放页 sheet 的 Compose 状态（sheetVisible 等）会全部丢失、掉回首页。
+        <!-- 入口声明在 flavor 清单里：phone = LAUNCHER，tv = LAUNCHER + LEANBACK_LAUNCHER。
+             configChanges：横屏全屏播放要切 requestedOrientation，若让 Activity 重建，
+             播放页 sheet 的 Compose 状态会全部丢失、掉回首页。
              自己处理方向/尺寸变化，Compose 直接按新 configuration 重组合。 -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode"
-            android:windowSoftInputMode="adjustResize">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+            android:windowSoftInputMode="adjustResize" />
 
         <!-- 日志文件分享（FileProvider） -->
         <provider
