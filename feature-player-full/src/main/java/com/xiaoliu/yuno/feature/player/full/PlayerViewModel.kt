@@ -25,7 +25,7 @@ import kotlinx.coroutines.launch
  *  2. 把 UI 手势转发给 PlaybackController
  */
 class PlayerViewModel(
-    val controller: PlaybackController,
+    private val controller: PlaybackController,
     private val lyricsRepository: LyricsRepository,
     private val favoriteStore: com.xiaoliu.yuno.data.repository.FavoriteStore
 ) : ViewModel() {
