@@ -31,6 +31,7 @@ dependencies {
     api(project(":feature-lyrics-render"))
     api(project(":feature-lyrics-portrait"))
     api(project(":feature-lyrics-floating"))
+    implementation(project(":feature-coverflow"))
 
     // Compose BOM：api 导出，feature 模块不必重复声明
     api(platform(libs.compose.bom))

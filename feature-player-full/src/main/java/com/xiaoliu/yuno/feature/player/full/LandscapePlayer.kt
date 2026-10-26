@@ -8,11 +8,13 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
@@ -54,7 +56,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -83,6 +87,8 @@ import com.xiaoliu.yuno.core.ui.component.AlbumBlurBackground
 import com.xiaoliu.yuno.feature.lyrics.render.LyricWaitingDots
 import com.xiaoliu.yuno.feature.player.KaraokeSingLine
 import com.xiaoliu.yuno.feature.player.WheelLyrics
+import com.xiaoliu.yuno.feature.coverflow.CoverFlowScreen
+import com.xiaoliu.yuno.feature.coverflow.CoverFlowViewModel
 import com.xiaoliu.yuno.core.ui.component.ArtworkPalette
 import com.xiaoliu.yuno.core.ui.component.rememberArtworkPalette
 import dev.chrisbanes.haze.ExperimentalHazeApi
@@ -159,6 +165,34 @@ fun LandscapePlayerOverlay(
         showNowPlaying = false
     }
 
+    // —— 3D 封面橱窗（书架选歌页；长按当前封面 2.75s 进入）——
+    val coverFlowVm = remember { CoverFlowViewModel(vm.controller) }
+    var coverFlowOpen by remember { mutableStateOf(false) }
+    // 帘幕进度：0=歌词页在位；1=被掀起抽走（露出书柜）
+    val curtain = remember { Animatable(0f) }
+    val playerScope = rememberCoroutineScope()
+
+    fun openCoverFlow() {
+        if (!coverFlowOpen) {
+            coverFlowOpen = true
+            playerScope.launch {
+                curtain.snapTo(0f)
+                curtain.animateTo(1f, tween(560, easing = FastOutSlowInEasing))
+            }
+        }
+    }
+
+    fun closeCoverFlow() {
+        playerScope.launch {
+            curtain.animateTo(0f, tween(380, easing = FastOutSlowInEasing))
+            coverFlowOpen = false
+        }
+    }
+
+    // 提交时的飞行封面：当前 2.5D 封面「左→中放大」，接住刚选中的盒子
+    val handoff = remember { Animatable(0f) }
+    var handoffUrl by remember { mutableStateOf<String?>(null) }
+
     Box(
         modifier
             .fillMaxSize()
@@ -182,7 +216,70 @@ fun LandscapePlayerOverlay(
                 .background(Color.Black.copy(alpha = 0.34f))
         )
 
-        Row(Modifier.fillMaxSize()) {
+        // —— 书柜层（在歌词页下面，帘幕掀起来才露脸）——
+        if (coverFlowOpen) {
+            val flyUrl = handoffUrl
+            val flyT = handoff.value
+            if (flyUrl != null) {
+                val density = LocalDensity.current
+                val screenW = with(density) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
+                val screenH = with(density) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
+                val flySize = screenH * (0.30f + 0.20f * flyT)
+                AsyncImage(
+                    model = flyUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .offset {
+                            IntOffset(
+                                (screenW * 0.12f + (screenW / 2f - flySize / 2f - screenW * 0.12f) * flyT).roundToInt(),
+                                (screenH / 2f - flySize / 2f).roundToInt()
+                            )
+                        }
+                        .size(with(density) { flySize.toDp() })
+                        .graphicsLayer { alpha = ((1f - flyT) * 0.9f).coerceIn(0f, 1f) }
+                        .clip(RoundedCornerShape(16.dp))
+                )
+            }
+        }
+
+        if (coverFlowOpen) {
+            CoverFlowScreen(
+                vm = coverFlowVm,
+                onExit = { closeCoverFlow() },
+                onCommitted = { committed ->
+                    // 用户钦定：上拖提交 → 歌词页从上往下压回来；
+                    // 与此同时原 2.5D 封面从左放大移到正中（接住新盒子的飞行动画）
+                    handoffUrl = queue.getOrNull(committed)?.artworkUrl
+                    playerScope.launch {
+                        handoff.snapTo(0f)
+                        handoff.animateTo(1f, tween(460, easing = FastOutSlowInEasing))
+                        handoffUrl = null
+                    }
+                    closeCoverFlow()
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        // —— 原有内容（帘幕层：上掀抽走 / 压回来）——
+        val curtainT = curtain.value
+        val curtainPx = with(LocalDensity.current) {
+            LocalConfiguration.current.screenHeightDp.dp.toPx()
+        }
+        Row(
+            Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    translationY = -curtainPx * curtainT
+                    rotationX = -16f * curtainT
+                    alpha = 1f - 0.30f * curtainT
+                    scaleX = 1f - 0.07f * curtainT
+                    scaleY = 1f - 0.07f * curtainT
+                    transformOrigin = TransformOrigin(0.5f, 0.5f)
+                    cameraDistance = 20f * density
+                }
+        ) {
             // —— 左半屏：Cover Flow ——
             CoverFlowArea(
                 vm = vm,
@@ -190,6 +287,7 @@ fun LandscapePlayerOverlay(
                 index = queueIndex,
                 palette = palette,
                 isPlaying = isPlaying,
+                onEnterCoverFlow = { openCoverFlow() },
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxSize()
@@ -266,10 +364,14 @@ private fun CoverFlowArea(
     index: Int,
     palette: ArtworkPalette,
     isPlaying: Boolean,
+    onEnterCoverFlow: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
+
+    // 长按进度（0..1）：按满 2.75 秒进书柜；外围画进度环
+    var holdProgress by remember { mutableFloatStateOf(0f) }
 
     // 浮点索引（真机要求）：拖动时跟手，松手后动画到相邻槽位。
     // 每张封面按「自己相对浮点索引的槽位」插值位置/缩放/倾斜/透明度 ——
@@ -395,8 +497,33 @@ private fun CoverFlowArea(
                 glowColor = palette.vibrant,
                 isCenter = abs(slot) < 0.5f,
                 onTap = { if (!isPlaying) vm.togglePlayPause() },
-                onDoubleTap = { if (isPlaying) vm.togglePlayPause() }
+                onDoubleTap = { if (isPlaying) vm.togglePlayPause() },
+                onHoldStart = { holdProgress = 0f },
+                onHoldTick = { holdProgress = it },
+                onHoldComplete = { holdProgress = 0f; onEnterCoverFlow() }
             )
+        }
+
+        // —— 长按进度环（2.75 秒倒读的视觉反馈）——
+        if (holdProgress > 0.001f) {
+            Canvas(
+                Modifier
+                    .offset {
+                        IntOffset(
+                            (centerX - coverPx / 2f - 14.dp.toPx()).roundToInt(),
+                            (centerY - coverPx / 2f - 14.dp.toPx()).roundToInt()
+                        )
+                    }
+                    .size(coverSize + 28.dp)
+            ) {
+                drawArc(
+                    color = Color.White.copy(alpha = 0.92f),
+                    startAngle = -90f,
+                    sweepAngle = 360f * holdProgress,
+                    useCenter = false,
+                    style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                )
+            }
         }
 
         // 暂停标记：暂停时出现在封面中央（单击封面恢复播放）
@@ -441,9 +568,13 @@ private fun FlowCover(
     glowColor: Color,
     isCenter: Boolean,
     onTap: () -> Unit,
-    onDoubleTap: () -> Unit
+    onDoubleTap: () -> Unit,
+    onHoldStart: () -> Unit = {},
+    onHoldTick: (Float) -> Unit = {},
+    onHoldComplete: () -> Unit = {}
 ) {
     val density = LocalDensity.current
+    val flowScope = rememberCoroutineScope()
     val absSlot = abs(slot).coerceAtMost(2.2f)
     val dir = if (slot >= 0f) 1f else -1f
     val near = absSlot.coerceAtMost(1f)          // 0 → 1（中间 → 相邻侧位）
@@ -473,7 +604,30 @@ private fun FlowCover(
                 if (isCenter) Modifier.pointerInput(Unit) {
                     detectTapGestures(
                         onDoubleTap = { onDoubleTap() },
-                        onTap = { onTap() }
+                        onTap = { onTap() },
+                        onPress = {
+                            // 长按 2.75 秒进书柜（用户钦定时长）；
+                            // 松手/侧滑取消即归零（滑动由外层横拖层接管，自动取消）
+                            val hold = Animatable(0f)
+                            onHoldStart()
+                            val holdJob = flowScope.launch {
+                                hold.animateTo(1f, tween(2750, easing = LinearEasing))
+                                onHoldComplete()
+                            }
+                            val holdPoll = flowScope.launch {
+                                while (true) {
+                                    onHoldTick(hold.value)
+                                    delay(16)
+                                }
+                            }
+                            try {
+                                tryAwaitRelease()
+                            } finally {
+                                holdJob.cancel()
+                                holdPoll.cancel()
+                                onHoldTick(0f)
+                            }
+                        }
                     )
                 } else Modifier
             )

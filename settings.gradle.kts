@@ -66,3 +66,6 @@ include(":feature-lyrics-floating")  // 浮动歌词
 
 // ── TV 版（遥控器交互 / 局域网登录；复用 lyrics-render 引擎）──
 include(":feature-tv")
+
+// ── 3D 封面橱窗（手机版「书架」选歌页，参考 QQ 音乐 iPhone Duo）──
+include(":feature-coverflow")
