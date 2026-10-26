@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -241,17 +242,19 @@ fun CoverFlowScreen(
                 }
             }
 
-            // —— 书本（真 3D 双面盒：页块平面 + 封面平面共轴旋转；按距离升序画）——
+            // —— 书本（单体模型：一个世界变换 + 开合铰链；按距离升序画）——
             posesWithLift.indices
                 .sortedBy { abs(it - floatIndex.value) }
                 .forEach { i ->
                     val t = queue.getOrNull(i) ?: return@forEach
                     val p = posesWithLift[i]
                     if (p.alpha <= 0.02f) return@forEach
+                    val d = i - floatIndex.value
                     Book3D(
                         track = t,
                         pose = p,
-                        z = 1f - abs(i - floatIndex.value).coerceAtMost(2f) * 0.3f
+                        openness = (1f - abs(d).coerceAtMost(0.5f) * 2f).coerceIn(0f, 1f),
+                        z = 1f - abs(d).coerceAtMost(2f) * 0.3f
                     )
                 }
 
@@ -294,68 +297,136 @@ fun CoverFlowScreen(
 }
 
 /**
- * 真 3D 盒子：两个平面共轴旋转 ——
- *   ① 页块平面（书脊包边）：挂在书的**外缘**（与参考一致：左侧书的书脊在左缘、
- *      右侧书的书脊在右缘），始终与封面保持 90°夹角；颜色 = 该专辑主色的
- *      深浅三档渐变（真机要求：包边也要填充主题色，不能是死灰）。
- *   ② 封面平面（专辑贴图）带着包边一起逐帧旋转。
- * 停靠姿态：rotationY +18°、rotationX 4°（不完全正对，左下近、右上往里压）。
+ * 单本 3D 书模型（真机 v5 重构）：一本书 = 一个整体。
+ *
+ * 变换层级：
+ *   · 外层 = 世界姿态（唯一旋转来源：rotationY 扇开 + rotationX 后仰 + 透视），
+ *     封面、书脊、页块**全部**挂在这一层下一起转 —— 治好「书脊和封面各转各的」
+ *   · 内层 = 「开合」铰链：只有封面绕右缘翻开这一个局部自由度（真书打开的语义，
+ *     不是部件乱转）
+ *
+ * 到主位（openness→1）= 打开：
+ *   封面自右缘向前翻（露页块视角）→ 封面与页块之间出现**书脊大缝**；
+ *   书脊在书的**右侧**、横排歌名；页块 + 书脊全部用专辑主色填充。
+ * 离开主位（openness→0）= 合拢成带右缘书脊的一本。
  */
 @Composable
-private fun Book3D(track: Track, pose: BookPose, z: Float) {
+private fun Book3D(track: Track, pose: BookPose, openness: Float, z: Float) {
     val density = LocalDensity.current
     val palette = rememberArtworkPalette(track.artworkUrl)
     val size = pose.size
-    val thickPx = (size * BOOK_THICKNESS * 3.6f).coerceAtLeast(size * 0.16f)
-    val pivotLeft = pose.pivotLeft
-    val origin = if (pivotLeft) TransformOrigin(0f, 0.5f) else TransformOrigin(1f, 0.5f)
+    val spine = size * 0.12f                    // 书脊宽（主题色 + 横排歌名）
+    val page = size * 0.18f                     // 页块厚（打开时露出的背块）
     val offX = pose.x - size / 2f
     val offY = pose.y - size / 2f - pose.lift
     val camDist = 12f * density.density
-
-    // ① 页块平面（外缘，主题色渐变）
-    val stripLeft = if (pivotLeft) offX + size - thickPx else offX
-    Box(
-        Modifier
-            .offset { IntOffset(stripLeft.roundToInt(), offY.roundToInt()) }
-            .width(with(density) { thickPx.toDp() })
-            .height(with(density) { size.toDp() })
-            .zIndex(z - 0.02f)
-            .graphicsLayer {
-                rotationY = pose.rotationY + (if (pivotLeft) -90f else 90f)
-                rotationX = pose.rotationX
-                transformOrigin = if (pivotLeft) TransformOrigin(1f, 0.5f) else TransformOrigin(0f, 0.5f)
-                cameraDistance = camDist
-                this.alpha = pose.alpha
-            }
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        lerp(palette.dominant, Color.White, 0.14f),
-                        palette.dominant,
-                        lerp(palette.dominant, Color.Black, 0.42f)
-                    )
-                )
-            )
+    val spineBrush = Brush.verticalGradient(
+        listOf(
+            lerp(palette.dominant, Color.White, 0.16f),
+            palette.dominant,
+            lerp(palette.dominant, Color.Black, 0.45f)
+        )
     )
 
-    // ② 封面平面
-    AsyncImage(
-        model = track.artworkUrl,
-        contentDescription = track.title,
-        contentScale = ContentScale.Crop,
-        modifier = Modifier
+    // —— 外层：世界姿态（整本书唯一的整体旋转）——
+    Box(
+        Modifier
             .offset { IntOffset(offX.roundToInt(), offY.roundToInt()) }
             .size(with(density) { size.toDp() })
             .zIndex(z)
             .graphicsLayer {
                 rotationY = pose.rotationY
                 rotationX = pose.rotationX
-                transformOrigin = origin
+                transformOrigin = TransformOrigin(0.5f, 0.5f)
                 cameraDistance = camDist
                 this.alpha = pose.alpha
             }
-    )
+    ) {
+        if (openness <= 0.02f) {
+            // — 合拢：一张封面 + 右缘书脊 —
+            AsyncImage(
+                model = track.artworkUrl,
+                contentDescription = track.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            Box(
+                Modifier
+                    .align(Alignment.CenterEnd)
+                    .width(with(density) { spine.toDp() })
+                    .fillMaxHeight()
+                    .graphicsLayer {
+                        rotationY = -90f
+                        transformOrigin = TransformOrigin(0f, 0.5f)
+                        cameraDistance = camDist
+                    }
+                    .background(spineBrush),
+                contentAlignment = Alignment.Center
+            ) { SpineTitle(track, size) }
+        } else {
+            // — 打开：封面自右缘向前翻 + 页块 + 书脊缝 —
+            // 页块（背块，主题色，略向后张）
+            Box(
+                Modifier
+                    .align(Alignment.CenterEnd)
+                    .width(with(density) { page.toDp() })
+                    .fillMaxHeight()
+                    .graphicsLayer {
+                        rotationY = -20f * openness
+                        transformOrigin = TransformOrigin(0f, 0.5f)
+                        cameraDistance = camDist
+                    }
+                    .background(spineBrush)
+            )
+            // 书脊缝（右侧、封面与页块之间的缝 + 横排歌名）
+            Box(
+                Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = with(density) { page.toDp() })
+                    .width(with(density) { spine.toDp() })
+                    .fillMaxHeight()
+                    .graphicsLayer {
+                        rotationY = 90f * openness
+                        transformOrigin = TransformOrigin(0f, 0.5f)
+                        cameraDistance = camDist
+                    }
+                    .background(spineBrush),
+                contentAlignment = Alignment.Center
+            ) { SpineTitle(track, size) }
+            // 封面：绕右缘向前翻
+            AsyncImage(
+                model = track.artworkUrl,
+                contentDescription = track.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        rotationY = -32f * openness
+                        transformOrigin = TransformOrigin(1f, 0.5f)
+                        cameraDistance = camDist
+                    }
+            )
+        }
+    }
+}
+
+/** 书脊上的横排歌名（参照参考图：歌名横着写在书脊高的一侧） */
+@Composable
+private fun SpineTitle(track: Track, size: Float) {
+    val density = LocalDensity.current
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = track.title,
+            color = Color.White.copy(alpha = 0.94f),
+            fontSize = with(density) { (size * 0.052f).toDp() }.value.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
 }
 
 /** 顶部玻璃圆钮 */
