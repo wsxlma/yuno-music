@@ -44,9 +44,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -60,6 +60,7 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.xiaoliu.yuno.core.model.Track
+import com.xiaoliu.yuno.core.ui.component.rememberArtworkPalette
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -186,18 +187,22 @@ fun CoverFlowScreen(
                         onDragEnd = {
                             when (axis) {
                                 1 -> {
+                                    // 浏览货架而已：只吸附到最近槽位，**不切歌**
+                                    //（真机 v4：把歌挪到主位就自动播放是擅作主张，撤掉）
                                     val target = floatIndex.value.roundToInt().coerceIn(0, queue.lastIndex)
                                     scope.launch {
                                         floatIndex.animateTo(target.toFloat(), tween(320, easing = FastOutSlowInEasing))
                                     }
-                                    if (target != currentIndex) vm.playAt(target)
                                 }
                                 2 -> {
                                     val lifted = liftedIndex
                                     val committed = liftPx.value > hPx * COMMIT_RATIO
                                     if (committed && lifted in queue.indices) {
-                                        if (lifted == currentIndex) vm.togglePlayPause()
-                                        else vm.playAt(lifted)
+                                        // 放到主位 = 切到这首；放到后面 = 作为下一曲
+                                        val posesNow = computePoses(queue.size, floatIndex.value, wPx / 2f, shelfCy, baseSize)
+                                        val dropX = posesNow.getOrNull(lifted)?.x ?: wPx / 2f
+                                        val atCenter = abs(dropX - wPx / 2f) < wPx * 0.25f
+                                        if (atCenter) vm.playAt(lifted) else vm.playNextAt(lifted)
                                         onCommitted(lifted)
                                     }
                                     scope.launch { liftPx.animateTo(0f, tween(260, easing = FastOutSlowInEasing)) }
@@ -290,26 +295,26 @@ fun CoverFlowScreen(
 
 /**
  * 真 3D 盒子：两个平面共轴旋转 ——
- *   ① 页块平面（封面的厚度面，暗色）永远与封面保持 90°；
- *   ② 封面平面（专辑贴图）带着页块一起转。
- * 转开角度由 pose.rotationY 驱动（拖动的每一帧都在变化 = 逐帧旋转），
- * 停靠姿态 = rotationY ±12° + rotationX 8°（真机规格：不完全正对、
- * 左下角近、右上方往里压）。
+ *   ① 页块平面（书脊包边）：挂在书的**外缘**（与参考一致：左侧书的书脊在左缘、
+ *      右侧书的书脊在右缘），始终与封面保持 90°夹角；颜色 = 该专辑主色的
+ *      深浅三档渐变（真机要求：包边也要填充主题色，不能是死灰）。
+ *   ② 封面平面（专辑贴图）带着包边一起逐帧旋转。
+ * 停靠姿态：rotationY +18°、rotationX 4°（不完全正对，左下近、右上往里压）。
  */
 @Composable
 private fun Book3D(track: Track, pose: BookPose, z: Float) {
     val density = LocalDensity.current
+    val palette = rememberArtworkPalette(track.artworkUrl)
     val size = pose.size
     val thickPx = (size * BOOK_THICKNESS * 3.6f).coerceAtLeast(size * 0.16f)
-    val pivotLeft = pose.rotationY >= 0f
+    val pivotLeft = pose.pivotLeft
     val origin = if (pivotLeft) TransformOrigin(0f, 0.5f) else TransformOrigin(1f, 0.5f)
     val offX = pose.x - size / 2f
     val offY = pose.y - size / 2f - pose.lift
     val camDist = 12f * density.density
 
-    // ① 页块平面（垫底：封面转开时它作为侧面厚度露出来）
-    // 铰链点与封面共享：pivotLeft 时挂在封面左缘、否则挂在右缘
-    val stripLeft = if (pivotLeft) offX else (offX + size - thickPx)
+    // ① 页块平面（外缘，主题色渐变）
+    val stripLeft = if (pivotLeft) offX + size - thickPx else offX
     Box(
         Modifier
             .offset { IntOffset(stripLeft.roundToInt(), offY.roundToInt()) }
@@ -317,15 +322,19 @@ private fun Book3D(track: Track, pose: BookPose, z: Float) {
             .height(with(density) { size.toDp() })
             .zIndex(z - 0.02f)
             .graphicsLayer {
-                rotationY = pose.rotationY - (if (pivotLeft) 90f else -90f)
+                rotationY = pose.rotationY + (if (pivotLeft) -90f else 90f)
                 rotationX = pose.rotationX
-                transformOrigin = origin
+                transformOrigin = if (pivotLeft) TransformOrigin(1f, 0.5f) else TransformOrigin(0f, 0.5f)
                 cameraDistance = camDist
                 this.alpha = pose.alpha
             }
             .background(
                 Brush.verticalGradient(
-                    listOf(Color(0xFF45454F), Color(0xFF1A1A22), Color(0xFF30303C))
+                    listOf(
+                        lerp(palette.dominant, Color.White, 0.14f),
+                        palette.dominant,
+                        lerp(palette.dominant, Color.Black, 0.42f)
+                    )
                 )
             )
     )
