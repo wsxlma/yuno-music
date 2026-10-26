@@ -5,7 +5,6 @@ import android.content.pm.ActivityInfo
 import android.graphics.Shader
 import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -166,10 +165,29 @@ fun LandscapePlayerOverlay(
         showNowPlaying = false
     }
 
-    // —— 3D 封面橱窗（书架选歌页；长按当前封面 2.75s 进入，与右侧歌词同屏）——
+    // —— 3D 封面橱窗（书架选歌页；长按当前封面 2.75s 进入）——
     val coverFlowVm = remember { CoverFlowViewModel(vm.controller) }
     var coverFlowOpen by remember { mutableStateOf(false) }
+    // 帘幕进度：0=歌词页在位；1=从上面被抽走（露出整页书架）
+    val curtain = remember { Animatable(0f) }
     val playerScope = rememberCoroutineScope()
+
+    fun openCoverFlow() {
+        if (!coverFlowOpen) {
+            coverFlowOpen = true
+            playerScope.launch {
+                curtain.snapTo(0f)
+                curtain.animateTo(1f, tween(560, easing = FastOutSlowInEasing))
+            }
+        }
+    }
+
+    fun closeCoverFlow() {
+        playerScope.launch {
+            curtain.animateTo(0f, tween(380, easing = FastOutSlowInEasing))
+            coverFlowOpen = false
+        }
+    }
 
     // 提交时的飞行封面：当前 2.5D 封面「左→中放大」，接住刚选中的盒子
     val handoff = remember { Animatable(0f) }
@@ -198,7 +216,26 @@ fun LandscapePlayerOverlay(
                 .background(Color.Black.copy(alpha = 0.34f))
         )
 
-        // 提交飞行封面（覆盖在整层之上；左→中放大接盒子）
+        // —— 整页书架（在帘幕下面，歌词页掀起后露脸）——
+        if (coverFlowOpen) {
+            CoverFlowScreen(
+                vm = coverFlowVm,
+                onExit = { closeCoverFlow() },
+                onCommitted = { committed ->
+                    // 上拖提交 → 歌词页从上压回来；原 2.5D 封面从左放大移中接盒子
+                    handoffUrl = queue.getOrNull(committed)?.artworkUrl
+                    playerScope.launch {
+                        handoff.snapTo(0f)
+                        handoff.animateTo(1f, tween(460, easing = FastOutSlowInEasing))
+                        handoffUrl = null
+                    }
+                    closeCoverFlow()
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        // 提交飞行封面（覆盖整层；左→中放大接盒子）
         val flyUrl = handoffUrl
         if (flyUrl != null) {
             val flyT = handoff.value
@@ -223,48 +260,36 @@ fun LandscapePlayerOverlay(
             )
         }
 
-        Row(Modifier.fillMaxSize()) {
-            // —— 左半屏：2.5D 封面 / 3D 书柜（长按切换，与右侧歌词同屏）——
-            Box(
-                Modifier
+        // —— 歌词页（帘幕：进=从上面掀起抽走；出=从上面压下来）——
+        val curtainT = curtain.value
+        val curtainPx = with(LocalDensity.current) {
+            LocalConfiguration.current.screenHeightDp.dp.toPx()
+        }
+        Row(
+            Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    translationY = -curtainPx * curtainT
+                    rotationX = -16f * curtainT
+                    alpha = 1f - 0.32f * curtainT
+                    scaleX = 1f - 0.06f * curtainT
+                    scaleY = 1f - 0.06f * curtainT
+                    transformOrigin = TransformOrigin(0.5f, 0.6f)
+                    cameraDistance = 20f * density
+                }
+        ) {
+            // —— 左半屏：2.5D Cover Flow ——
+            CoverFlowArea(
+                vm = vm,
+                tracks = queue,
+                index = queueIndex,
+                palette = palette,
+                isPlaying = isPlaying,
+                onEnterCoverFlow = { openCoverFlow() },
+                modifier = Modifier
                     .weight(1f)
                     .fillMaxSize()
-            ) {
-                Crossfade(
-                    targetState = coverFlowOpen,
-                    animationSpec = tween(300),
-                    label = "coverflowSwitch"
-                ) { open ->
-                    if (open) {
-                        CoverFlowScreen(
-                            vm = coverFlowVm,
-                            onExit = { coverFlowOpen = false },
-                            onCommitted = { committed ->
-                                // 用户钦定：上拖提交 → 当前 2.5D 封面从左放大移中
-                                //（接住新盒子的飞行动画），随后回到 2.5D 换歌
-                                handoffUrl = queue.getOrNull(committed)?.artworkUrl
-                                playerScope.launch {
-                                    handoff.snapTo(0f)
-                                    handoff.animateTo(1f, tween(460, easing = FastOutSlowInEasing))
-                                    handoffUrl = null
-                                }
-                                coverFlowOpen = false
-                            },
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        CoverFlowArea(
-                            vm = vm,
-                            tracks = queue,
-                            index = queueIndex,
-                            palette = palette,
-                            isPlaying = isPlaying,
-                            onEnterCoverFlow = { coverFlowOpen = true },
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-                }
-            }
+            )
 
             // —— 右半屏：滚筒歌词 ——
             Box(

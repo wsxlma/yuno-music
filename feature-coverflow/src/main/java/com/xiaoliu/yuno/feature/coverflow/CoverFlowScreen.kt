@@ -45,6 +45,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -235,18 +236,16 @@ fun CoverFlowScreen(
                 }
             }
 
-            // —— 书本：书脊淡出、封面淡入（直入直出，不做斜纸片旋转）——
+            // —— 书本（真 3D 双面盒：页块平面 + 封面平面共轴旋转；按距离升序画）——
             posesWithLift.indices
                 .sortedBy { abs(it - floatIndex.value) }
                 .forEach { i ->
                     val t = queue.getOrNull(i) ?: return@forEach
                     val p = posesWithLift[i]
                     if (p.alpha <= 0.02f) return@forEach
-                    val face = (1f - abs(i - floatIndex.value)).coerceIn(0f, 1f)
-                    BookOnShelf(
+                    Book3D(
                         track = t,
                         pose = p,
-                        face = face,
                         z = 1f - abs(i - floatIndex.value).coerceAtMost(2f) * 0.3f
                     )
                 }
@@ -290,99 +289,64 @@ fun CoverFlowScreen(
 }
 
 /**
- * 一本书 = 书脊层（直插窄条 + 竖排字）与封面层（完整方形封面）交叉淡入淡出。
- * face = 0（纯书脊，直入直出）→ 1（完整封面）。
+ * 真 3D 盒子：两个平面共轴旋转 ——
+ *   ① 页块平面（封面的厚度面，暗色）永远与封面保持 90°；
+ *   ② 封面平面（专辑贴图）带着页块一起转。
+ * 转开角度由 pose.rotationY 驱动（拖动的每一帧都在变化 = 逐帧旋转），
+ * 停靠姿态 = rotationY ±12° + rotationX 8°（真机规格：不完全正对、
+ * 左下角近、右上方往里压）。
  */
 @Composable
-private fun BookOnShelf(track: Track, pose: BookPose, face: Float, z: Float) {
+private fun Book3D(track: Track, pose: BookPose, z: Float) {
     val density = LocalDensity.current
     val size = pose.size
-    val spineW = (size * BOOK_THICKNESS * 3.2f).coerceAtLeast(size * 0.14f)
+    val thickPx = (size * BOOK_THICKNESS * 3.6f).coerceAtLeast(size * 0.16f)
+    val pivotLeft = pose.rotationY >= 0f
+    val origin = if (pivotLeft) TransformOrigin(0f, 0.5f) else TransformOrigin(1f, 0.5f)
+    val offX = pose.x - size / 2f
+    val offY = pose.y - size / 2f - pose.lift
+    val camDist = 12f * density.density
 
-    // 封面层：face ∈ (0,1] 时可见；尺寸从书脊高度放大到完整封面
-    val coverShow = face.coerceIn(0f, 1f)
-    if (coverShow > 0.01f) {
-        val coverSize = size * (0.58f + 0.42f * coverShow)
-        AsyncImage(
-            model = track.artworkUrl,
-            contentDescription = track.title,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .offset {
-                    IntOffset(
-                        pose.x.roundToInt() - (coverSize / 2f).roundToInt(),
-                        (pose.y - coverSize / 2f - pose.lift).roundToInt()
-                    )
-                }
-                .size(with(density) { coverSize.toDp() })
-                .zIndex(z)
-                .graphicsLayer {
-                    this.alpha = pose.alpha * coverShow
-                }
-        )
-        // 中心书的「书口」左侧厚条（盒子的体积暗示）
-        if (coverShow > 0.86f) {
-            Box(
-                Modifier
-                    .offset {
-                        IntOffset(
-                            pose.x.roundToInt() - (coverSize / 2f).roundToInt() - (size * BOOK_THICKNESS * 2f).roundToInt(),
-                            (pose.y - coverSize / 2f - pose.lift).roundToInt()
-                        )
-                    }
-                    .width(with(density) { (size * BOOK_THICKNESS * 2f).toDp() })
-                    .height(with(density) { coverSize.toDp() })
-                    .zIndex(z - 0.01f)
-                    .graphicsLayer { this.alpha = pose.alpha * (coverShow - 0.86f) / 0.14f }
-                    .background(
-                        Brush.horizontalGradient(
-                            listOf(Color(0xFF0A0A0E), Color(0xFF2A2A34), Color(0xFF10101A))
-                        )
-                    )
-            )
-        }
-    }
-
-    // 书脊层：face=0 时是唯一实体；face→1 时淡出
-    val spineShow = (1f - coverShow).coerceIn(0f, 1f)
-    if (spineShow > 0.01f) {
-        Box(
-            Modifier
-                .offset {
-                    IntOffset(
-                        pose.x.roundToInt() - (spineW / 2f).roundToInt(),
-                        (pose.y - size / 2f - pose.lift).roundToInt()
-                    )
-                }
-                .width(with(density) { spineW.toDp() })
-                .height(with(density) { size.toDp() })
-                .zIndex(z - 0.005f)
-                .graphicsLayer { this.alpha = pose.alpha * spineShow }
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color(0xFF3A3A46), Color(0xFF1C1C24), Color(0xFF2E2E3A))
-                    ),
-                    RoundedCornerShape(4.dp)
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            // 竖排歌名（自下而上读）
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-                modifier = Modifier.rotate(90f)
-            ) {
-                Text(
-                    text = track.title,
-                    color = Color.White.copy(alpha = 0.92f),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontSize = with(density) { (size * 0.045f).toDp() }.value.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+    // ① 页块平面（垫底：封面转开时它作为侧面厚度露出来）
+    // 铰链点与封面共享：pivotLeft 时挂在封面左缘、否则挂在右缘
+    val stripLeft = if (pivotLeft) offX else (offX + size - thickPx)
+    Box(
+        Modifier
+            .offset { IntOffset(stripLeft.roundToInt(), offY.roundToInt()) }
+            .width(with(density) { thickPx.toDp() })
+            .height(with(density) { size.toDp() })
+            .zIndex(z - 0.02f)
+            .graphicsLayer {
+                rotationY = pose.rotationY - (if (pivotLeft) 90f else -90f)
+                rotationX = pose.rotationX
+                transformOrigin = origin
+                cameraDistance = camDist
+                this.alpha = pose.alpha
             }
-        }
-    }
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color(0xFF45454F), Color(0xFF1A1A22), Color(0xFF30303C))
+                )
+            )
+    )
+
+    // ② 封面平面
+    AsyncImage(
+        model = track.artworkUrl,
+        contentDescription = track.title,
+        contentScale = ContentScale.Crop,
+        modifier = Modifier
+            .offset { IntOffset(offX.roundToInt(), offY.roundToInt()) }
+            .size(with(density) { size.toDp() })
+            .zIndex(z)
+            .graphicsLayer {
+                rotationY = pose.rotationY
+                rotationX = pose.rotationX
+                transformOrigin = origin
+                cameraDistance = camDist
+                this.alpha = pose.alpha
+            }
+    )
 }
 
 /** 顶部玻璃圆钮 */
