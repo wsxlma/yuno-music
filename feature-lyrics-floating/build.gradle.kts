@@ -26,6 +26,7 @@ dependencies {
     api(project(":core-model"))
     api(project(":core-ui"))
     api(project(":feature-lyrics-render"))
+    api(project(":feature-lyrics-fx"))
 
     // Compose BOM：api 导出，feature 模块不必重复声明
     api(platform(libs.compose.bom))

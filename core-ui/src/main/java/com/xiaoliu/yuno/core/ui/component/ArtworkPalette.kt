@@ -22,12 +22,21 @@ import coil3.request.allowHardware
 import coil3.toBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlin.math.pow
+
+/** 面积加权色块：weight 归一化到 0..1（总和=1），代表该颜色在原封面中的面积占比 */
+@Immutable
+data class WeightedSwatch(
+    val color: Color,
+    val weight: Float
+)
 
 /**
  * 从专辑封面提取的色板。
  * 用途：歌词页渐变背景（Apple Music 风格）、大标题氛围光、选中态强调色。
  *
  * 需求：「色彩从专辑封面取 vibrant/dark 主色，不要写死 primary」
+ * 2026-10-28 追加：[swatches] —— 全部色块按原图面积加权，流动背景按这个比例铺色。
  */
 @Immutable
 data class ArtworkPalette(
@@ -35,10 +44,21 @@ data class ArtworkPalette(
     val vibrant: Color,
     val dark: Color,
     val light: Color,
-    val muted: Color
+    val muted: Color,
+    /** 按面积加权的全部色块（面积越大权重越高），供流动背景使用 */
+    val swatches: List<WeightedSwatch> = emptyList()
 ) {
-    /** 歌词页底色渐变用的颜色序列（暗 → 主 → 彩 → 亮） */
-    fun gradientColors(): List<Color> = listOf(dark, dominant, vibrant, light)
+    /** 流动背景用：没有加权色块时回退到旧五个角色色（等权） */
+    fun flowingSwatches(): List<WeightedSwatch> =
+        swatches.ifEmpty {
+            listOf(
+                WeightedSwatch(dominant, 0.30f),
+                WeightedSwatch(vibrant, 0.25f),
+                WeightedSwatch(light, 0.20f),
+                WeightedSwatch(muted, 0.15f),
+                WeightedSwatch(dark, 0.10f)
+            )
+        }
 
     companion object {
         /** 《勇气》封面那种暖棕+蓝灰的兜底色板——无网络/未登录时也不至于难看 */
@@ -47,7 +67,14 @@ data class ArtworkPalette(
             vibrant = Color(0xFFC08A5E),
             dark = Color(0xFF16181F),
             light = Color(0xFF9FB4C8),
-            muted = Color(0xFF4A4E5A)
+            muted = Color(0xFF4A4E5A),
+            swatches = listOf(
+                WeightedSwatch(Color(0xFF8A6A55), 0.34f),
+                WeightedSwatch(Color(0xFFC08A5E), 0.24f),
+                WeightedSwatch(Color(0xFF9FB4C8), 0.20f),
+                WeightedSwatch(Color(0xFF4A4E5A), 0.14f),
+                WeightedSwatch(Color(0xFF16181F), 0.08f)
+            )
         )
     }
 }
@@ -142,6 +169,32 @@ private suspend fun extractPalette(
         .maxByOrNull { it.population }?.rgb
         ?: lerp(Color(dominantRgb), Color.Gray, 0.45f).toArgb()
 
+    // ── 面积加权色块（流动背景用）──
+    // 用户钦定（2026-10-28）：每一种颜色都要在背景上有所体现，
+    // 面积占比越大背景占比越大；面积权重再乘 1.25 的强调指数（share^1.25 后归一化，
+    // 大色块更突出、小色块保留但不抢戏）。
+    // 2.6.4 用户第三次反馈：背景里出现"一堆无关杂色" —— 根因是把 population>0 的
+    // 全部色块都收了进来（封面边缘的抗锯齿杂色、噪点色全在内）。
+    // 改为：只取**面积前 3 大**的颜色，且面积低于第一大色 1/6 的直接丢。
+    val topPop = byArea.firstOrNull()?.population ?: 0
+    val areaFloor2 = (topPop / 6).coerceAtLeast(1)
+    val kept = byArea
+        .filter { it.population >= areaFloor2 }
+        .take(3)
+    val totalPopulation = kept.sumOf { it.population }.coerceAtLeast(1)
+    val weighted = kept
+        .map { swatch ->
+            val share = swatch.population.toFloat() / totalPopulation
+            // 2.6.5：提亮上限收到 0.58，避免整块背景发白（用户："取到的颜色有点奇怪"）
+            WeightedSwatch(color = Color(swatch.rgb).ensureLuminance(0.05f, 0.58f), weight = share)
+        }
+        .let { list ->
+            // 1.25 强调指数
+            val emphasized = list.map { it.copy(weight = it.weight.pow(1.25f)) }
+            val sum = emphasized.sumOf { it.weight.toDouble() }.toFloat().coerceAtLeast(1e-6f)
+            emphasized.map { it.copy(weight = it.weight / sum) }
+        }
+
     ArtworkPalette(
         dominant = Color(dominantRgb).ensureLuminance(0.16f, 0.8f),
         vibrant = Color(
@@ -149,6 +202,7 @@ private suspend fun extractPalette(
         ).ensureLuminance(0.24f),
         dark = Color(darkRgb).ensureLuminance(0.03f, 0.28f),
         light = Color(lightRgb).ensureLuminance(0.34f),
-        muted = Color(mutedRgb).ensureLuminance(0.10f, 0.55f)
+        muted = Color(mutedRgb).ensureLuminance(0.10f, 0.55f),
+        swatches = weighted
     )
 }.getOrNull()

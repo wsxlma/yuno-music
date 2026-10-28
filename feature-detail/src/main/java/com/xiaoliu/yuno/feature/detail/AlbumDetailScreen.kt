@@ -1,7 +1,7 @@
 package com.xiaoliu.yuno.feature.detail
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import com.xiaoliu.yuno.core.ui.formatDuration
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,7 +43,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.xiaoliu.yuno.core.ui.component.ArtworkImage
 import com.xiaoliu.yuno.core.ui.component.GlassIconButton
-import com.xiaoliu.yuno.core.ui.component.GlassSurface
 import com.xiaoliu.yuno.core.ui.component.TrackRow
 import com.xiaoliu.yuno.core.ui.component.YunoLoadingCircle
 import com.xiaoliu.yuno.core.ui.component.rememberArtworkPalette
@@ -55,7 +54,6 @@ import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.glass.hazeGlass
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.rememberHazeState
 
 // ============================================================================
 // 专辑详情 —— Material 3 质感：
@@ -338,7 +336,3 @@ private fun HintText(text: String) {
     }
 }
 
-private fun formatDuration(ms: Long): String {
-    val totalSec = ms / 1000
-    return "%d:%02d".format(totalSec / 60, totalSec % 60)
-}

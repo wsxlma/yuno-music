@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <!--
+    ★ 布局视口固定 1600 CSS px 宽，高度由屏幕比例自动推导（WebView 整体缩放到物理屏幕）。
+
+    为什么是 1600：Folia 是桌面应用，各模式的字号/半径都带 px 硬顶
+    （classic 字号上限 72px、claddagh 环半径上限 560px、pendolo 弧半径按 min(w,h) 算）。
+    这些上限只有在"接近桌面宽度"的布局面下才成立：1600 宽时 72px 字 ≈ 4.5% 屏宽、
+    560px 半径 ≈ 35% 屏宽，与 Folia 桌面观感一致，且缩放后仍然锐利（缩放由 WebView 做，
+    不损失分辨率）。
+
+    之前用 width=device-width 时布局面只有 ~830 CSS px，硬顶不再起约束作用，
+    各模式按比例算出来的尺寸相对屏幕全部失真 —— 这是"心环过大 / 摆钟出屏 /
+    特效只占中间一条"的尺寸根因（2026-10-28 2.6.3-r 统一视口策略）。
+
+    配套：FxWebView 必须 setUseWideViewPort(true) + loadWithOverviewMode(true)，
+    否则 WebView 会忽略本 viewport 用默认窄视口。
+  -->
+  <meta name="viewport" content="width=1600, user-scalable=no" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>Yuno Folia FX</title>
+  <style>html,body{touch-action:none;-webkit-user-select:none;user-select:none;background:0 0;width:100%;height:100%;margin:0;padding:0;overflow:hidden}#root{width:100%;height:100%}</style>
+  <script type="module" crossorigin src="./bundle.js"></script>
+  <link rel="stylesheet" crossorigin href="./style.css">
+</head>
+<body>
+  <div id="root"></div>
+</body>
+</html>

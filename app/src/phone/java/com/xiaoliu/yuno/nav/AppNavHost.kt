@@ -1,17 +1,10 @@
 package com.xiaoliu.yuno.nav
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,7 +29,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
@@ -65,6 +57,8 @@ import com.xiaoliu.yuno.feature.library.LibraryScreen
 import com.xiaoliu.yuno.feature.library.LibraryViewModel
 import com.xiaoliu.yuno.feature.player.FullPlayerScreen
 import com.xiaoliu.yuno.feature.player.MiniPlayer
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.xiaoliu.yuno.feature.player.PlayerViewModel
 import com.xiaoliu.yuno.feature.search.SearchScreen
 import com.xiaoliu.yuno.feature.search.SearchViewModel
@@ -285,6 +279,7 @@ private fun MainShell(
     val innerNav = rememberNavController()
     val entry by innerNav.currentBackStackEntryAsState()
     val currentRoute = entry?.destination?.route
+
 
     // 有曲目才浮出迷你播放器（低频流，别整页订阅 50ms 的进度流）
     val hasTrack by remember {

@@ -27,7 +27,6 @@ import com.xiaoliu.yuno.feature.tv.TvLoginPage
 import com.xiaoliu.yuno.feature.tv.TvShell
 import com.xiaoliu.yuno.feature.tv.clearCrashText
 import com.xiaoliu.yuno.feature.tv.readCrashText
-import dev.chrisbanes.haze.ExperimentalHazeApi
 import dev.chrisbanes.haze.HazePerformanceMode
 import dev.chrisbanes.haze.LocalHazePerformanceMode
 

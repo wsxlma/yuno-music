@@ -1,6 +1,7 @@
 package com.xiaoliu.yuno.feature.search
 
 import androidx.compose.foundation.layout.Arrangement
+import com.xiaoliu.yuno.core.ui.formatDuration
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -49,7 +50,6 @@ import dev.chrisbanes.haze.ExperimentalHazeApi
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.glass.hazeGlass
-import com.xiaoliu.yuno.core.ui.component.GlassSurface
 import com.xiaoliu.yuno.core.ui.component.YunoLoadingCircle
 import com.xiaoliu.yuno.core.ui.component.TrackRow
 import com.xiaoliu.yuno.core.ui.theme.YunoAccent
@@ -412,7 +412,3 @@ private fun HintText(text: String) {
     }
 }
 
-private fun formatDuration(ms: Long): String {
-    val totalSec = ms / 1000
-    return "%d:%02d".format(totalSec / 60, totalSec % 60)
-}

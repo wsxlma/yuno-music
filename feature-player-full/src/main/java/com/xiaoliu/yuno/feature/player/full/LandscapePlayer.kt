@@ -2,11 +2,8 @@ package com.xiaoliu.yuno.feature.player
 
 import android.app.Activity
 import android.content.pm.ActivityInfo
-import android.graphics.Shader
-import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -18,30 +15,23 @@ import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -54,46 +44,27 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
-import androidx.compose.ui.ExperimentalComposeUiApi
-import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.xiaoliu.yuno.core.model.LyricsTimeline
-import com.xiaoliu.yuno.core.ui.component.LyricFont
 import com.xiaoliu.yuno.core.model.Track
-import com.xiaoliu.yuno.core.ui.component.AlbumBlurBackground
-import com.xiaoliu.yuno.feature.lyrics.render.LyricWaitingDots
-import com.xiaoliu.yuno.feature.player.KaraokeSingLine
+import com.xiaoliu.yuno.core.ui.component.FlowingPaletteBackground
 import com.xiaoliu.yuno.feature.player.WheelLyrics
 import com.xiaoliu.yuno.core.ui.component.ArtworkPalette
 import com.xiaoliu.yuno.core.ui.component.rememberArtworkPalette
 import dev.chrisbanes.haze.ExperimentalHazeApi
-import dev.chrisbanes.haze.HazeInput
-import dev.chrisbanes.haze.HazePerformanceMode
-import dev.chrisbanes.haze.HazeProgressive
-import dev.chrisbanes.haze.LocalHazePerformanceMode
-import dev.chrisbanes.haze.blur.HazeBlurStyle
-import dev.chrisbanes.haze.blur.hazeBlur
-import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -164,15 +135,15 @@ fun LandscapePlayerOverlay(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // 背景：静态颜料混色（再压暗一点，营造氛围）。
-        // 耗电优化：横屏全屏里颜料流动动画停摆 —— 歌词滚筒/封面切换自带动态，
-        // 流动画层白跑；静态时观感不变（色团仍在，只是不漂移）
-        AlbumBlurBackground(
-            artworkUrl = track?.artworkUrl,
+        // 背景：面积加权颜料流动（2026-10-28 用户钦定）——
+        // 封面上每一种颜色都按原图面积占比出现在背景里，大色块更突出，
+        // Screen 混合出迷幻的混色；Lissajous 随机洋流（2.6.1-r，慢速）
+        FlowingPaletteBackground(
             palette = palette,
             modifier = Modifier.fillMaxSize(),
-            scrimAlpha = 0.42f,
-            animated = false
+            animated = true,
+            speedFactor = 1.0f,
+            scrimAlpha = 0.42f
         )
 
         // 全屏灰黑蒙版：除了当前封面与当前歌词，别处都被压下去（暗淡不是死黑）

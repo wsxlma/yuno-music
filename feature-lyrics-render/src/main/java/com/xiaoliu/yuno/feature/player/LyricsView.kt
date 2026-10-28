@@ -1,6 +1,7 @@
 package com.xiaoliu.yuno.feature.player
 
 import androidx.compose.animation.core.FastOutSlowInEasing
+import com.xiaoliu.yuno.core.ui.easeOutCubic
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -8,11 +9,11 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -45,7 +46,6 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontStyle
@@ -61,7 +61,6 @@ import com.xiaoliu.yuno.core.model.LyricsTimeline
 import com.xiaoliu.yuno.core.ui.component.LyricFont
 import com.xiaoliu.yuno.feature.lyrics.render.LyricWaitingDots
 import kotlin.math.min
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeoutOrNull
 
 // ============================================================================
@@ -550,19 +549,15 @@ private fun KaraokeLine(
                     1f + (grown - 1f) * lineZoom
                 }
 
+                // 光晕层改走 WebView（方法 B），Canvas 只画底子 + 揭示（drawChar）
                 when {
-                    // ── 已唱完：整字白 ──
                     p >= 1f -> drawChar(
                         this, layout, at, cell, Color.White, cs(1f), 1f, scalePivotY = cell.bottom
                     )
-
-                    // ── 正在唱：**暗底子 + 白色从左到右扫**，同时拉伸 ──
                     p > 0f -> drawChar(
                         this, layout, at, cell, dim, cs(p), p,
                         scalePivotY = cell.bottom
                     )
-
-                    // ── 还没唱到：整字暗底（必须看得见，不许隐形）──
                     else -> drawChar(
                         this, layout, at, cell, dim, cs(0f), 0f, scalePivotY = cell.bottom
                     )
@@ -587,7 +582,7 @@ private fun KaraokeLine(
  * Beta1 的 bug：只画揭示层、不画底子，且 reveal=0 时裁剪宽度为 0
  * → 唱到之前整句隐形、唱到时才现场绘画。这就是你说的那个症状。
  */
-internal fun drawChar(
+fun drawChar(
     scope: androidx.compose.ui.graphics.drawscope.DrawScope,
     layout: TextLayoutResult,
     at: Offset,
@@ -786,7 +781,3 @@ fun StaticLyricLine(
     )
 }
 
-private fun easeOutCubic(t: Float): Float {
-    val c = t.coerceIn(0f, 1f)
-    return 1f - (1f - c) * (1f - c) * (1f - c)
-}

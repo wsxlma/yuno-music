@@ -1,8 +1,8 @@
 package com.xiaoliu.yuno.feature.player
 
 import androidx.compose.foundation.Canvas
+import com.xiaoliu.yuno.core.ui.easeOutCubic
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -19,7 +19,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -462,10 +461,6 @@ private fun smooth(x: Float, start: Float, end: Float): Float {
     return t * t * (3f - 2f * t)
 }
 
-private fun easeOutCubic(t: Float): Float {
-    val c = t.coerceIn(0f, 1f)
-    return 1f - (1f - c) * (1f - c) * (1f - c)
-}
 
 private fun lerp(a: Offset, b: Offset, t: Float): Offset =
     Offset(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t)

@@ -73,6 +73,14 @@ class LyricsRepository(
         }
 
 // ---- 2) LRCLIB 兜底（syncedLyrics 是行级 LRC；增强 LRC 语法也兼容）----
+        // ★ 2026-10-28 2.6.4（用户钦定"逐字优先"）：
+        //   AUTO 模式下，LRCLIB 拿到的是**行级**歌词时不立刻返回，先挂着，
+        //   继续去网易云碰运气拿 YRC（逐字）；网易云也拿不到逐字才回落到这份行级。
+        //   起因：原顺序是 Apple → LRCLIB → 网易云，而 LRCLIB 大多是行级、
+        //   网易云的 YRC 才是逐字 —— 等于"逐字源排在行级源后面"，绝大多数歌
+        //   在 LRCLIB 就命中返回，永远拿不到逐字（用户反馈"字亮起来的时机不对"）。
+        var heldLineLevel: Lyrics? = null
+        var heldLineLevelRaw: String? = null
         // 用户选了"仅 Apple"时整段跳过
         if (mode != LyricsSourcePref.Mode.APPLE_ONLY) {
             val durationSec = (track.durationMs / 1000L).takeIf { it > 0 }
@@ -94,16 +102,23 @@ class LyricsRepository(
                         else LyricsSource.LRCLIB_LRC
                     val lyrics = Lyrics(track.id, parsed.lines.withPhraseSpacing(), source)
                     if (isValidTimeline(lyrics.lines, track.durationMs)) {
-                        writeCache(track.id, "lrc", synced)
-                        memory.put(track.id, lyrics)
-                        return@withContext lyrics
+                        if (parsed.wordLevel || mode != LyricsSourcePref.Mode.AUTO) {
+                            writeCache(track.id, "lrc", synced)
+                            memory.put(track.id, lyrics)
+                            return@withContext lyrics
+                        }
+                        // AUTO + 行级：先挂着，去试网易云逐字（**不写缓存**，
+                        // 否则下次直接命中行级，永远不会升级到逐字）
+                        heldLineLevel = lyrics
+                        heldLineLevelRaw = synced
+                    } else {
+                        YunoLog.d(
+                            "Lyrics",
+                            "LRCLIB timeline invalid for ${track.id} " +
+                                "(reason=${timelineFaultReason(lyrics.lines, track.durationMs)})"
+                        )
+                        deleteBadCache(track.id, "lrc")
                     }
-                    YunoLog.d(
-                        "Lyrics",
-                        "LRCLIB timeline invalid for ${track.id} " +
-                            "(reason=${timelineFaultReason(lyrics.lines, track.durationMs)})"
-                    )
-                    deleteBadCache(track.id, "lrc")
                 }
             }
         }
@@ -123,23 +138,36 @@ class LyricsRepository(
                     LyricsParser.parseLrc(netease)?.lines
                 }
                 if (!lines.isNullOrEmpty()) {
+                    // YRC（逐字）才会被这里优先采纳；行级 LRC 只在没有 LRCLIB 兜底时才用
+                    val isWordLevel = netease.trimStart().startsWith("{")
                     val lyrics = Lyrics(track.id, lines.withPhraseSpacing(), LyricsSource.NETEASE)
                     if (isValidTimeline(lyrics.lines, track.durationMs)) {
-                        writeCache(track.id, "netease", netease)
-                        memory.put(track.id, lyrics)
-                        return@withContext lyrics
+                        if (isWordLevel || heldLineLevel == null) {
+                            writeCache(track.id, "netease", netease)
+                            memory.put(track.id, lyrics)
+                            return@withContext lyrics
+                        }
+                        // 网易云也是行级、但手上已有 LRCLIB 行级 → 保留 LRCLIB（更早的来源优先）
+                    } else {
+                        YunoLog.d(
+                            "Lyrics",
+                            "NetEase timeline invalid for ${track.id} " +
+                                "(reason=${timelineFaultReason(lyrics.lines, track.durationMs)})"
+                        )
+                        deleteBadCache(track.id, "netease")
                     }
-                    YunoLog.d(
-                        "Lyrics",
-                        "NetEase timeline invalid for ${track.id} " +
-                            "(reason=${timelineFaultReason(lyrics.lines, track.durationMs)})"
-                    )
-                    deleteBadCache(track.id, "netease")
                 }
             }
         }
 
-        // ---- 3) 真没有 / 两源时间轴都坏 ----
+        // ---- 3) 回落到之前挂起的 LRCLIB 行级（AUTO 模式下没有逐字源时的最终答案）----
+        heldLineLevel?.let { lv ->
+            heldLineLevelRaw?.let { writeCache(track.id, "lrc", it) }
+            memory.put(track.id, lv)
+            return@withContext lv
+        }
+
+        // ---- 4) 真没有 / 各源时间轴都坏 ----
         null
     }
 

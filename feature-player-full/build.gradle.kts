@@ -29,6 +29,7 @@ dependencies {
     api(project(":core-playback"))
     api(project(":data"))
     api(project(":feature-lyrics-render"))
+    api(project(":feature-lyrics-fx"))
     api(project(":feature-lyrics-portrait"))
     api(project(":feature-lyrics-floating"))
 

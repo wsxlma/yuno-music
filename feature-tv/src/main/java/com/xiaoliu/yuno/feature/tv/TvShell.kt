@@ -24,7 +24,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.xiaoliu.yuno.core.ui.component.rememberLiquidGlassStyle
 import com.xiaoliu.yuno.core.ui.theme.YunoAccent
 import com.xiaoliu.yuno.core.ui.theme.YunoTextSecondary

@@ -1,6 +1,7 @@
 package com.xiaoliu.yuno.feature.player
 
 import androidx.activity.compose.BackHandler
+import com.xiaoliu.yuno.core.ui.formatDuration
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutLinearInEasing
@@ -62,7 +63,6 @@ import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.RepeatOne
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.StarBorder
-import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -101,13 +101,13 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.xiaoliu.yuno.core.model.LyricsTimeline
+import com.xiaoliu.yuno.core.network.FxPref
 import com.xiaoliu.yuno.core.model.RepeatMode
 import com.xiaoliu.yuno.core.model.Track
 import com.xiaoliu.yuno.core.ui.component.AlbumBlurBackground
@@ -186,6 +186,8 @@ fun FullPlayerScreen(
     var showQueue by remember { mutableStateOf(false) }
     // 横屏全屏播放（三个点菜单进入）
     var showFullscreen by remember { mutableStateOf(false) }
+    // 横屏全屏特效页（三个点菜单 → 全屏特效 → 15 个模式之一）
+    var fullscreenFxMode by remember { mutableStateOf<String?>(null) }
     // 控制栏（进度条 + 控制板）自动渐隐：真机需求 —— 1.75s 无操作就淡出，
     // 一碰屏幕立刻回来；翻歌词 / 点选歌词期间不算"无操作"，保持可见。
     var controlsVisible by remember { mutableStateOf(true) }
@@ -194,6 +196,10 @@ fun FullPlayerScreen(
     // 「手势锁」：最近一次被判为**滑动**的时间戳。
     // 滑动之后短时间内到达的歌词点击一律丢弃 —— 防误触跳歌的关键。
     var swipeGuardMs by remember { mutableStateOf(0L) }
+    // 方法 B：当前行字格坐标回传缓存（KaraokeLine 算好后喂给 WebView 光晕层）
+    var glowCellsState by remember {
+        mutableStateOf(GlowCellsHolder())
+    }
 
     // 进入时记录状态栏真实高度：隐藏后系统 insets 归零，标题栏用记录值钉回原位
     val statusBarTopPx = remember {
@@ -238,9 +244,10 @@ fun FullPlayerScreen(
         }
     }
 
-    // 系统返回：全屏模式先退出全屏 → 聚焦态退出聚焦 → 收起播放页
+    // 系统返回：全屏特效/全屏播放先退出 → 聚焦态退出聚焦 → 收起播放页
     BackHandler {
         when {
+            fullscreenFxMode != null -> fullscreenFxMode = null
             showFullscreen -> showFullscreen = false
             focusRequest != null -> focusRequest = null
             else -> onClose()
@@ -420,7 +427,11 @@ fun FullPlayerScreen(
                     onFavBounds = { favBtnRect = it },
                     onMoreBounds = { moreBtnRect = it },
                     onArtworkClick = { showLyrics = !showLyrics },
-                    onEnterFullscreen = { showFullscreen = true }
+                    onEnterFullscreen = { showFullscreen = true },
+                    onEnterFullscreenFx = { mode ->
+                        FxPref.setFullscreenMode(mode)
+                        fullscreenFxMode = mode
+                    }
                 )
             }
         }
@@ -517,6 +528,16 @@ fun FullPlayerScreen(
                 modifier = Modifier.fillMaxSize()
             )
         }
+
+        // ——— 横屏全屏特效页（最上层覆盖；WebView 路线 B）———
+        fullscreenFxMode?.let { mode ->
+            FxLandscapeOverlay(
+                vm = vm,
+                mode = mode,
+                onExit = { fullscreenFxMode = null },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
     }
 }
 
@@ -530,7 +551,8 @@ private fun PlayerTopBar(
     onFavBounds: (Rect) -> Unit,
     onMoreBounds: (Rect) -> Unit,
     onArtworkClick: () -> Unit,
-    onEnterFullscreen: () -> Unit
+    onEnterFullscreen: () -> Unit,
+    onEnterFullscreenFx: (String) -> Unit
 ) {
     val favorites by vm.favoriteIds.collectAsStateWithLifecycle(initialValue = emptySet())
     val isFavorite = track?.id?.let { it in favorites } ?: false
@@ -580,6 +602,34 @@ private fun PlayerTopBar(
         }
         Spacer(Modifier.width(8.dp))
         var moreMenu by remember { mutableStateOf(false) }
+        var fxMenu by remember { mutableStateOf(false) }
+
+        // 菜单弹出动画：0.82 → 1.0 弹簧回弹（Q 弹，用户钦定 2026-10-28）。
+        // 每次展开重组内容根时 snapTo 再 animateTo，回弹只发生在打开瞬间。
+        val moreMenuScale = remember { Animatable(1f) }
+        val fxMenuScale = remember { Animatable(1f) }
+        LaunchedEffect(moreMenu) {
+            if (moreMenu) {
+                moreMenuScale.snapTo(0.82f)
+                moreMenuScale.animateTo(
+                    targetValue = 1f,
+                    animationSpec = spring(dampingRatio = 0.42f, stiffness = 560f)
+                )
+            }
+        }
+        LaunchedEffect(fxMenu) {
+            if (fxMenu) {
+                fxMenuScale.snapTo(0.82f)
+                fxMenuScale.animateTo(
+                    targetValue = 1f,
+                    animationSpec = spring(dampingRatio = 0.42f, stiffness = 560f)
+                )
+            }
+        }
+
+        // 菜单圆角：4dp 默认值太生硬，改成 26dp 大圆角（与本 App 液态玻璃胶囊同档）
+        val menuShape = RoundedCornerShape(26.dp)
+
         Box(Modifier.onGloballyPositioned { onMoreBounds(it.boundsInRoot()) }) {
             GlassIconButton(
                 icon = Icons.Rounded.MoreVert,
@@ -591,7 +641,12 @@ private fun PlayerTopBar(
             DropdownMenu(
                 expanded = moreMenu,
                 onDismissRequest = { moreMenu = false },
-                containerColor = Color(0xF216161E)
+                containerColor = Color(0xF216161E),
+                shape = menuShape,
+                modifier = Modifier.graphicsLayer {
+                    scaleX = moreMenuScale.value
+                    scaleY = moreMenuScale.value
+                }
             ) {
                 DropdownMenuItem(
                     text = { Text("全屏播放", color = Color.White) },
@@ -600,6 +655,41 @@ private fun PlayerTopBar(
                         onEnterFullscreen()
                     }
                 )
+                // 全屏特效：展开二级列表（Folia 特效模式）
+                DropdownMenuItem(
+                    text = { Text("全屏特效", color = Color.White) },
+                    onClick = {
+                        moreMenu = false
+                        fxMenu = true
+                    }
+                )
+            }
+
+            // 二级菜单：全屏特效模式列表，点一个 → 存模式 + 进特效页
+            DropdownMenu(
+                expanded = fxMenu,
+                onDismissRequest = { fxMenu = false },
+                containerColor = Color(0xF216161E),
+                shape = menuShape,
+                modifier = Modifier.graphicsLayer {
+                    scaleX = fxMenuScale.value
+                    scaleY = fxMenuScale.value
+                }
+            ) {
+                FxPref.FULLSCREEN_MODES.forEach { mode ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                mode.label,
+                                color = if (mode.id == FxPref.fullscreenMode) YunoAccent else Color.White
+                            )
+                        },
+                        onClick = {
+                            fxMenu = false
+                            onEnterFullscreenFx(mode.id)
+                        }
+                    )
+                }
             }
         }
     }
@@ -1071,10 +1161,6 @@ private fun QueueOverlay(
     }
 }
 
-private fun formatDuration(ms: Long): String {
-    val totalSec = ms / 1000
-    return "%d:%02d".format(totalSec / 60, totalSec % 60)
-}
 
 // ---------------- 大封面模式（真机要求：无歌词的全屏封面） ----------------
 
@@ -1235,4 +1321,9 @@ private class ButtonHolesMask(
         shader.setFloatUniform("uR", radius)
         return shader
     }
+}
+
+// ── 方法 B：字格坐标回传缓存 ──────────────────────────────────────────
+private class GlowCellsHolder {
+    var cells: List<com.xiaoliu.yuno.feature.player.WordCell> = emptyList()
 }

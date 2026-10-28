@@ -14,7 +14,6 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.unit.dp
 import com.xiaoliu.yuno.core.model.LyricLine
 import com.xiaoliu.yuno.core.ui.component.LyricFont
 
@@ -98,6 +97,7 @@ fun KaraokeSingLine(
                 if (q >= 1f) CHAR_SCALE else 1f + (CHAR_SCALE - 1f) * q
             }
 
+            // 光晕层改走 WebView（方法 B），Canvas 只画底子 + 揭示
             when {
                 p >= 1f -> drawChar(
                     this, layout, at, cell, Color.White,

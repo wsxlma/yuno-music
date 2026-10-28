@@ -19,7 +19,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asComposeRenderEffect
@@ -49,8 +48,6 @@ import kotlin.math.roundToInt
 // ============================================================================
 
 // ── 横屏滚筒歌词的排版常量（真机规格 Beta5）──────────────
-/** 当前行缩放 */
-private const val CURRENT_LINE_SCALE = 1.14f
 /**
  * 下一句缩放 —— 真机确认这个大小合适，**不要动**。
  * 下下句 = 本值 × 0.9，之后每行再 ×0.9（几何衰减）。

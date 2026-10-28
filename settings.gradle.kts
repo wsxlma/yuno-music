@@ -63,6 +63,7 @@ include(":feature-player-full")      // 全屏播放
 include(":feature-lyrics-render")    // 歌词渲染引擎（逐字/行级/等待球/字格/滚筒共享件）
 include(":feature-lyrics-portrait")  // 竖屏歌词页（照搬 Apple Music）
 include(":feature-lyrics-floating")  // 浮动歌词
+include(":feature-lyrics-fx")        // Folia 风格歌词特效层（glow/弹簧/呼吸/涟漪），依赖 feature-lyrics-render
 
 // ── TV 版（遥控器交互 / 局域网登录；复用 lyrics-render 引擎）──
 include(":feature-tv")

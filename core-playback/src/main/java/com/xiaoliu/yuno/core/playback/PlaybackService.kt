@@ -7,6 +7,7 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.Timeline
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
@@ -58,6 +59,8 @@ class PlaybackService : MediaSessionService() {
                 /* handleAudioFocus = */ true
             )
             .setHandleAudioBecomingNoisy(true)
+            // 音频管线挂 Tee：解码后的 PCM 实时算 5 频段能量（Folia 全屏特效驱动用）
+            .setRenderersFactory(TeeRenderersFactory(this))
             .setMediaSourceFactory(buildMediaSourceFactory())
             .build()
 
@@ -124,6 +127,13 @@ class PlaybackService : MediaSessionService() {
 
     private val stateListener = object : Player.Listener {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) = pushFullState()
+
+        // ★ 时间轴变化（2026-10-28 2.6.12）：加入待播列表 / 插播 / 队列拖动排序 / 移出队列
+        //   改的都是**时间轴**，但这些操作不会触发上面任何一个已注册的事件
+        //   （当前曲目没变、播放状态没变、位置也没断）→ 队列内容从来没被推出去，
+        //   UI 看到的还是旧队列，于是表现为"加入待播列表 / 插播失效"。
+        //   顺带把队列面板的「拖动排序」「移出」一起修了（它们同样只改时间轴）。
+        override fun onTimelineChanged(timeline: Timeline, reason: Int) = pushFullState()
 
         override fun onIsPlayingChanged(isPlaying: Boolean) = pushFullState()
 

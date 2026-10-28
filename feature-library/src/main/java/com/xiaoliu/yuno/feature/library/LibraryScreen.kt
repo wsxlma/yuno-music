@@ -1,6 +1,7 @@
 package com.xiaoliu.yuno.feature.library
 
 import androidx.compose.foundation.background
+import com.xiaoliu.yuno.core.ui.formatDuration
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -718,7 +719,3 @@ private fun PlaylistTile(playlist: Playlist, onClick: () -> Unit) {
     }
 }
 
-private fun formatDuration(ms: Long): String {
-    val totalSec = ms / 1000
-    return "%d:%02d".format(totalSec / 60, totalSec % 60)
-}

@@ -1,6 +1,7 @@
 package com.xiaoliu.yuno.feature.detail
 
 import androidx.compose.foundation.background
+import com.xiaoliu.yuno.core.ui.formatDuration
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -52,7 +53,6 @@ import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.glass.hazeGlass
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.rememberHazeState
 
 // ============================================================================
 // 歌单详情 —— 与专辑详情同工艺（M3 质感 + 液态玻璃信息卡）：
@@ -333,7 +333,3 @@ private fun PldHintText(text: String) {
     }
 }
 
-private fun formatDuration(ms: Long): String {
-    val totalSec = ms / 1000
-    return "%d:%02d".format(totalSec / 60, totalSec % 60)
-}

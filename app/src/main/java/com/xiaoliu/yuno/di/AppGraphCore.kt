@@ -2,6 +2,7 @@ package com.xiaoliu.yuno.di
 
 import android.app.Application
 import com.xiaoliu.yuno.core.network.AudioQuality
+import com.xiaoliu.yuno.core.network.FxPref
 import com.xiaoliu.yuno.core.network.LyricsSourcePref
 import com.xiaoliu.yuno.core.network.YunoLog
 import com.xiaoliu.yuno.core.network.api.AppleLyricsApi
@@ -88,6 +89,9 @@ open class AppGraphCore(protected val app: Application) {
 
         // 歌词源偏好读入内存（LyricsRepository 按模式分派取词顺序）
         LyricsSourcePref.init(app)
+
+        // 歌词特效偏好（简单/全屏两组，设置页与歌词页特效入口读取）
+        FxPref.init(app)
 
         // 歌词字体偏好读入内存（LyricsView/LandscapePlayer 渲染时取）
         LyricFont.init(app)

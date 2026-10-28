@@ -19,7 +19,6 @@ import com.xiaoliu.yuno.core.ui.theme.YunoInk
 import com.xiaoliu.yuno.core.ui.theme.YunoTheme
 import com.xiaoliu.yuno.nav.AppNavHost
 import com.xiaoliu.yuno.ui.LoginScreen
-import dev.chrisbanes.haze.ExperimentalHazeApi
 import dev.chrisbanes.haze.HazePerformanceMode
 import dev.chrisbanes.haze.LocalHazePerformanceMode
 
