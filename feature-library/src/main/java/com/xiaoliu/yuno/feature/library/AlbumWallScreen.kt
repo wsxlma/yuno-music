@@ -738,7 +738,12 @@ private fun WallCard(
         }
     }
 
-    // 选中：原地"拎起来"（轻量展开）—— 块内不重排，卡片轻微放大 + 上浮
+    // 选中：封面轻微"拎起来"（轻量放大）。
+    // ★ 2.9.4 修正：scale 必须只作用在**封面内容**上，不能作用在整张卡上 ——
+    //   上一版把 scale 加在卡片的 graphicsLayer 里，而 clip 在它内层（裁不住缩放），
+    //   于是卡片整体放大 4.5%，跨两列的巨卡横向顶出格子约 9px，白色选中框跟着
+    //   跑到隔壁卡上（用户报"周边白框超出边界"）。现在卡片本体尺寸不变，
+    //   缩放交给内层封面、由父级 clip 裁在卡内 —— 白框永远严丝合缝贴着自己的边。
     val pop by animateFloatAsState(
         targetValue = if (selected) 1.045f else 1f,
         animationSpec = spring(dampingRatio = 0.72f, stiffness = 620f),
@@ -751,8 +756,6 @@ private fun WallCard(
             .width(width)
             .height(cardH)
             .graphicsLayer {
-                scaleX = pop
-                scaleY = pop
                 alpha = entrance.value
                 translationY = (1f - entrance.value) * 28.dp.toPx()
             }
@@ -769,7 +772,13 @@ private fun WallCard(
             url = item.artworkUrl,
             contentDescription = item.title,
             cardAspect = if (heightPx > 0f) widthPx / heightPx else 1f,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                // 选中时封面自己轻微放大（父级 clip 收住，不溢出格子）
+                .graphicsLayer {
+                    scaleX = pop
+                    scaleY = pop
+                },
             blurRadius = 26.dp,
             scrim = 0.40f
         )

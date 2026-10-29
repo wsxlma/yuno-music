@@ -14,8 +14,8 @@ android {
         applicationId = "com.xiaoliu.yuno"
         minSdk = 26
         targetSdk = 37
-        versionCode = 138
-        versionName = "2.9.3-r"
+        versionCode = 139
+        versionName = "2.9.4-r"
     }
 
     // 个人版签名：优先用 D:\Yuno\keys\release-keystore.properties 指向的正式
