@@ -53,8 +53,8 @@ import com.xiaoliu.yuno.feature.detail.PlaylistDetailScreen
 import com.xiaoliu.yuno.feature.detail.PlaylistDetailViewModel
 import com.xiaoliu.yuno.feature.home.HomeScreen
 import com.xiaoliu.yuno.feature.home.HomeViewModel
-import com.xiaoliu.yuno.feature.library.LibraryScreen
-import com.xiaoliu.yuno.feature.library.LibraryViewModel
+import com.xiaoliu.yuno.feature.library.AlbumWallScreen
+import com.xiaoliu.yuno.feature.library.AlbumWallViewModel
 import com.xiaoliu.yuno.feature.player.FullPlayerScreen
 import com.xiaoliu.yuno.feature.player.MiniPlayer
 import androidx.compose.runtime.mutableStateOf
@@ -321,7 +321,11 @@ private fun MainShell(
                 )
             }
         }
-    ) { _ ->
+    ) { innerPadding ->
+        // 底栏（迷你控制器 + 胶囊 Tab）实际高度：内容区要让出来。
+        // 之前这里用 `{ _ -> }` 把 innerPadding 扔掉，内容一路铺到屏幕底，
+        // 专辑墙/三排墙才会被 tab 栏压住、胶囊按钮掉到最下面。
+        val bottomBarHeight = innerPadding.calculateBottomPadding()
         Box(
             Modifier
                 .fillMaxSize()
@@ -345,22 +349,27 @@ private fun MainShell(
                     val vm: HomeViewModel = viewModel(factory = graph.viewModelFactory)
                     HomeScreen(vm = vm, onAlbumClick = onAlbumClick)
                 }
+                // 2026-10-29 2.8.0b1：资料库页整页换成专辑墙（旧 LibraryScreen 已删除）
                 composable(BottomTab.LIBRARY.route) {
-                    val vm: LibraryViewModel = viewModel(factory = graph.viewModelFactory)
-                    val context = LocalContext.current
-                    val scope = rememberCoroutineScope()
-                    LibraryScreen(
+                    val vm: AlbumWallViewModel = viewModel(factory = graph.viewModelFactory)
+                    AlbumWallScreen(
                         vm = vm,
-                        onAlbumClick = onAlbumClick,
-                        onPlaylistClick = onPlaylistClick,
                         hazeState = hazeState,
-                        onExportLogs = { shareYunoLog(context) },
-                        onLogout = { graph.logoutNow() }
+                        bottomInset = bottomBarHeight,
+                        onAlbumDetail = onAlbumClick,
+                        onPlaylistDetail = onPlaylistClick
                     )
                 }
                 composable(BottomTab.SEARCH.route) {
                     val vm: SearchViewModel = viewModel(factory = graph.viewModelFactory)
-                    SearchScreen(vm = vm, onAlbumClick = onAlbumClick, hazeState = hazeState)
+                    val context = LocalContext.current
+                    SearchScreen(
+                        vm = vm,
+                        onAlbumClick = onAlbumClick,
+                        hazeState = hazeState,
+                        onExportLogs = { shareYunoLog(context) },
+                        onLogout = { graph.logoutNow() }
+                    )
                 }
             }
         }

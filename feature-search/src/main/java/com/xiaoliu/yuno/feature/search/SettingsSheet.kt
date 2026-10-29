@@ -1,4 +1,4 @@
-package com.xiaoliu.yuno.feature.library
+package com.xiaoliu.yuno.feature.search
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable

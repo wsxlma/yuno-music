@@ -163,11 +163,19 @@ class PlaybackController(
             return
         }
         val index = c.mediaItemCount          // 插入位置 = 末尾
-        c.addMediaItem(track.toMediaItem())
+        runCatching { c.addMediaItem(track.toMediaItem()) }
         scope.launch {
-            val resolved = runCatching { resolver.resolve(track) }.getOrNull() ?: return@launch
-            if (index < c.mediaItemCount) {
-                c.replaceMediaItem(index, resolved.toMediaItem())
+            val resolved = runCatching { resolver.resolve(track) }.getOrNull()
+            if (resolved == null) {
+                // resolve 失败（网络/未登录/preview 也拿不到）：撤掉占位项。
+                // 留着会让 ExoPlayer 撞见一个 uri 为空的残缺项 → 播到就报错/闪退。
+                if (index in 0 until c.mediaItemCount) {
+                    runCatching { c.removeMediaItem(index) }
+                }
+                return@launch
+            }
+            if (index in 0 until c.mediaItemCount) {
+                runCatching { c.replaceMediaItem(index, resolved.toMediaItem()) }
             }
         }
     }
@@ -183,11 +191,18 @@ class PlaybackController(
             return
         }
         val index = (c.currentMediaItemIndex + 1).coerceIn(1, c.mediaItemCount)
-        c.addMediaItem(index, track.toMediaItem())
+        runCatching { c.addMediaItem(index, track.toMediaItem()) }
         scope.launch {
-            val resolved = runCatching { resolver.resolve(track) }.getOrNull() ?: return@launch
-            if (index < c.mediaItemCount) {
-                c.replaceMediaItem(index, resolved.toMediaItem())
+            val resolved = runCatching { resolver.resolve(track) }.getOrNull()
+            if (resolved == null) {
+                // resolve 失败：撤掉占位项（同 addToQueue 的残缺项清理）
+                if (index in 0 until c.mediaItemCount) {
+                    runCatching { c.removeMediaItem(index) }
+                }
+                return@launch
+            }
+            if (index in 0 until c.mediaItemCount) {
+                runCatching { c.replaceMediaItem(index, resolved.toMediaItem()) }
             }
         }
     }
@@ -198,14 +213,15 @@ class PlaybackController(
         if (from !in 0 until c.mediaItemCount) return
         if (to !in 0 until c.mediaItemCount) return
         if (from == to) return
-        c.moveMediaItem(from, to)
+        // 防崩：MediaController 在命令竞态/未就绪时会抛异常，这里一律吞掉不闪退
+        runCatching { c.moveMediaItem(from, to) }
     }
 
     /** 移出队列：删掉第 index 项（删的是当前曲时 Media3 自动顺延到下一首） */
     fun removeFromQueue(index: Int) {
         val c = controller ?: return
         if (index !in 0 until c.mediaItemCount) return
-        c.removeMediaItem(index)
+        runCatching { c.removeMediaItem(index) }
     }
 
     /** 后台补给：小批（4 首）解析剩余曲目，逐批 replaceMediaItem 填进队列 */

@@ -156,13 +156,16 @@ class PlaybackService : MediaSessionService() {
 
     /** 全量状态快照（不含高频进度，进度由 ticker 补） */
     private fun pushFullState() {
-        val queue = if (player.mediaItemCount > 0) {
-            (0 until player.mediaItemCount).map { player.getMediaItemAt(it).toTrack() }
-        } else {
-            emptyList()
-        }
-        val duration = player.duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: 0L
-        PlaybackStateHub.update {
+        // onTimelineChanged 可能在 addMediaItem/replaceMediaItem 的瞬间触发，
+        // mediaItemCount 与 getMediaItemAt 之间若时间轴又变，getMediaItemAt 会越界抛异常。
+        // 这里整段包 runCatching：任何越界/并发读都退化成"旧队列"，绝不崩。
+        val snapshot = runCatching {
+            val queue = if (player.mediaItemCount > 0) {
+                (0 until player.mediaItemCount).map { player.getMediaItemAt(it).toTrack() }
+            } else {
+                emptyList()
+            }
+            val duration = player.duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: 0L
             PlaybackState(
                 currentTrack = player.currentMediaItem?.toTrack(),
                 positionMs = player.currentPosition.coerceAtLeast(0L),
@@ -174,7 +177,9 @@ class PlaybackService : MediaSessionService() {
                 queue = queue,
                 queueIndex = player.currentMediaItemIndex
             )
-        }
+        }.getOrNull() ?: return
+
+        PlaybackStateHub.update { snapshot }
     }
 
     /** 进度采样：播放中每 50ms 一次（需求钦定节奏） */

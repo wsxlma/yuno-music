@@ -8,7 +8,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.xiaoliu.yuno.feature.detail.AlbumDetailViewModel
 import com.xiaoliu.yuno.feature.detail.PlaylistDetailViewModel
 import com.xiaoliu.yuno.feature.home.HomeViewModel
-import com.xiaoliu.yuno.feature.library.LibraryViewModel
+import com.xiaoliu.yuno.feature.library.AlbumWallViewModel
 import com.xiaoliu.yuno.feature.player.PlayerViewModel
 import com.xiaoliu.yuno.feature.search.SearchViewModel
 
@@ -21,7 +21,7 @@ class AppGraph(app: Application) : AppGraphCore(app) {
     val viewModelFactory: ViewModelProvider.Factory = viewModelFactory {
         initializer { HomeViewModel(catalogRepository, localCache, playbackController) }
         initializer { SearchViewModel(catalogRepository, playbackController) }
-        initializer { LibraryViewModel(libraryRepository, localCache, playbackController) }
+        initializer { AlbumWallViewModel(libraryRepository, localCache, playbackController) }
         initializer { PlayerViewModel(playbackController, lyricsRepository, favoriteStore) }
         initializer {
             val handle = createSavedStateHandle()

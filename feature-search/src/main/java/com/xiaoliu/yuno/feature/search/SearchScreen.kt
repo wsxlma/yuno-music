@@ -20,20 +20,26 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.font.FontWeight
@@ -44,7 +50,11 @@ import com.xiaoliu.yuno.core.model.Track
 import com.xiaoliu.yuno.core.ui.component.AlbumCard
 import com.xiaoliu.yuno.core.ui.component.ArtistRow
 import com.xiaoliu.yuno.core.ui.component.CollapsingHeader
+import com.xiaoliu.yuno.core.network.AudioQuality
+import com.xiaoliu.yuno.core.network.LyricsSourcePref
 import com.xiaoliu.yuno.core.ui.component.GlassChip
+import com.xiaoliu.yuno.core.ui.component.GlassIconButton
+import com.xiaoliu.yuno.core.ui.component.LyricFont
 import com.xiaoliu.yuno.core.ui.component.rememberLiquidGlassStyle
 import dev.chrisbanes.haze.ExperimentalHazeApi
 import dev.chrisbanes.haze.HazeInput
@@ -64,14 +74,32 @@ import androidx.compose.foundation.text.KeyboardOptions
 //   · 结果按 歌曲 / 专辑 / 歌手 三个 Tab 切换
 // ============================================================================
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
     vm: SearchViewModel,
     onAlbumClick: (Album) -> Unit,
     hazeState: HazeState,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** 设置面板里的「导出日志」—— 由外层注入（沿用原资料库页的能力） */
+    onExportLogs: () -> Unit = {},
+    /** 设置面板里的「退出登录」 */
+    onLogout: () -> Unit = {}
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
+
+    // ── 设置（2026-10-29 2.8.0b1：资料库页被专辑墙替换后，设置入口搬到搜索页右上角）──
+    var showSettings by remember { mutableStateOf(false) }
+    var audioQuality by remember { mutableStateOf(AudioQuality.quality) }
+    var dolbyAtmos by remember { mutableStateOf(AudioQuality.dolbyAtmosEnabled) }
+    var lyricsSourceMode by remember { mutableStateOf(LyricsSourcePref.mode) }
+    var lyricFontPreset by remember { mutableStateOf(LyricFont.preset) }
+    val ctx = LocalContext.current
+    val versionName = remember(ctx) {
+        runCatching {
+            ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName
+        }.getOrNull().orEmpty()
+    }
     val chartState by vm.chart.collectAsStateWithLifecycle()
 
     val listState = rememberLazyListState()
@@ -84,11 +112,24 @@ fun SearchScreen(
     }
 
     Column(modifier.fillMaxSize()) {
-        CollapsingHeader(
-            title = "搜索",
-            collapseFractionProvider = { collapseFraction.value },
-            modifier = Modifier.padding(horizontal = 20.dp)
-        )
+        Box(Modifier.fillMaxWidth()) {
+            CollapsingHeader(
+                title = "搜索",
+                collapseFractionProvider = { collapseFraction.value },
+                modifier = Modifier.padding(horizontal = 20.dp)
+            )
+            // 右上角液态玻璃设置球（原来挂在资料库页右上角徽章上）
+            GlassIconButton(
+                icon = Icons.Outlined.Settings,
+                onClick = { showSettings = true },
+                size = 44.dp,
+                iconSize = 20.dp,
+                hazeState = hazeState,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(end = 18.dp, top = 10.dp)
+            )
+        }
 
         // 真机反馈 Beta6：标题「搜索」和搜索框挨得太近、且框没边框显得黑不溜秋
         // → 拉开间距 + 搜索框本体加半透明描边
@@ -133,6 +174,42 @@ fun SearchScreen(
                 ResultList(state = state, vm = vm, onAlbumClick = onAlbumClick, listState = listState)
             }
         }
+    }
+
+    if (showSettings) {
+        SettingsSheet(
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            versionName = versionName,
+            quality = audioQuality,
+            onSelectQuality = { q ->
+                audioQuality = q
+                AudioQuality.setQuality(q)
+            },
+            dolbyAtmos = dolbyAtmos,
+            onToggleDolbyAtmos = { on ->
+                dolbyAtmos = on
+                AudioQuality.setDolbyAtmos(on)
+            },
+            lyricsSourceMode = lyricsSourceMode,
+            onSelectLyricsSource = { m ->
+                lyricsSourceMode = m
+                LyricsSourcePref.setMode(m)
+            },
+            lyricFontPreset = lyricFontPreset,
+            onSelectLyricFont = { f ->
+                lyricFontPreset = f
+                LyricFont.setPreset(f)
+            },
+            onExportLogs = {
+                showSettings = false
+                onExportLogs()
+            },
+            onLogout = {
+                showSettings = false
+                onLogout()
+            },
+            onDismiss = { showSettings = false }
+        )
     }
 }
 

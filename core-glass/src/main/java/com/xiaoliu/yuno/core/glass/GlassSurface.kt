@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.xiaoliu.yuno.core.ui.theme.YunoTextPrimary
@@ -104,12 +105,17 @@ fun GlassChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     selected: Boolean = false,
-    hazeState: HazeState? = null
+    hazeState: HazeState? = null,
+    /** 玻璃底不透明度：压在深色内容上时要调高才看得出玻璃 */
+    surfaceAlpha: Float? = null,
+    /** 文字样式：默认 labelLarge；详情页的两个主按钮需要更大 */
+    textStyle: TextStyle? = null,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
 ) {
     val shape = RoundedCornerShape(999.dp)
 
     if (hazeState != null) {
-        val style = rememberLiquidGlassStyle(shape = shape, highlight = selected)
+        val style = rememberLiquidGlassStyle(shape = shape, highlight = selected, surfaceAlpha = surfaceAlpha)
         Box(
             modifier = modifier
                 .hazeGlass(
@@ -118,12 +124,12 @@ fun GlassChip(
                 )
                 .clip(shape)
                 .clickable(onClick = onClick)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(contentPadding),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = text,
-                style = MaterialTheme.typography.labelLarge,
+                style = textStyle ?: MaterialTheme.typography.labelLarge,
                 color = if (selected) YunoTextPrimary else YunoTextSecondary
             )
         }
@@ -145,20 +151,28 @@ fun GlassChip(
             )
             .border(1.dp, Color.White.copy(alpha = borderAlpha), shape)
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(contentPadding),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = text,
-            style = MaterialTheme.typography.labelLarge,
+            style = textStyle ?: MaterialTheme.typography.labelLarge,
             color = if (selected) YunoTextPrimary else YunoTextSecondary
         )
     }
 }
 
 /**
- * 圆形玻璃图标按钮 —— 歌词页顶栏的星标/更多、专辑页返回钮。
- * 传 hazeState → 真·液态玻璃；不传 → 静态玻璃兜底。
+ * 圆形玻璃图标按钮 —— 歌词页顶栏的星标/更多、专辑页返回钮、专辑墙退出球。
+ *
+ * 正确用法（2026-10-29 2.8.0b7，用户给出的实现路径）：
+ *   ① 页级建 `val hazeState = rememberHazeState()`
+ *   ② 把**内容/封面/流动背景**标成采样源：`Modifier.hazeSource(hazeState)`，
+ *      而且它必须画在玻璃元素的**下面一层**（同级的兄弟节点，不能在玻璃里面）
+ *   ③ 玻璃元素传这个 hazeState
+ *
+ * 玻璃"看不见"几乎永远是 ② 出错：底层没有可采样的内容（比如整屏被一块不透明纯色
+ * 铺满），或者玻璃被塞进了自己的 source 子树里。**不要去调折射/高光参数。**
  */
 @OptIn(ExperimentalHazeApi::class)
 @Composable
@@ -169,10 +183,14 @@ fun GlassIconButton(
     size: Dp = 44.dp,
     iconSize: Dp = 20.dp,
     tint: Color = Color.White.copy(alpha = 0.92f),
-    hazeState: HazeState? = null
+    hazeState: HazeState? = null,
+    /** 折射层的底色不透明度（小球的体积感；null = 小球工艺默认 0.16） */
+    surfaceAlpha: Float? = null
 ) {
     if (hazeState != null) {
-        val style = rememberLiquidGlassStyle(shape = CircleShape)
+        // 真·液态玻璃：折射/模糊/高光全部由 haze 采样背后的内容生成。
+        // 圆球用小球专用工艺（球径小，折射位移按球径收，否则边缘卷成一圈粗白边）。
+        val style = rememberLiquidGlassBallStyle(surfaceAlpha = surfaceAlpha)
         Box(
             modifier = modifier
                 .size(size)
@@ -194,6 +212,7 @@ fun GlassIconButton(
         return
     }
 
+    // 没有 hazeState 时的静态降级（不是"假玻璃"，是明确的无折射兜底）
     Box(
         modifier = modifier
             .size(size)
