@@ -37,10 +37,9 @@ object AppleWidevine {
     private const val LICENSE_URL =
         "https://play.itunes.apple.com/WebObjects/MZPlay.woa/wa/acquireWebPlaybackLicense"
 
-    /** CDM 没给默认地址时的兜底：谷歌 Widevine 设备证书服务器 */
+    /** CDM 没给默认地址时的兜底：谷歌 Widevine 设备证书服务器（无 Key 调用，仅作兜底，配额较低） */
     private const val FALLBACK_PROVISION_URL =
-        "https://www.googleapis.cn/certificateprovisioning/v1/devicecertificates/create" +
-            "?key=AIzaSyB-5OLKTx2iU5JKOfoWgYFpA_f_wV8j80c"
+        "https://www.googleapis.cn/certificateprovisioning/v1/devicecertificates/create"
 
     @Volatile private var auth: AuthStore? = null
     @Volatile private var tokens: DevTokenProvider? = null
